@@ -325,6 +325,75 @@ body,.app{font-family:'Geist',system-ui,sans-serif;background:#F2F5EF;color:#0B1
   .auth-school{font-size:24px}.auth-crest{width:72px;height:72px;font-size:32px}
 }
 @media (max-width:420px){.mg{grid-template-columns:repeat(2,1fr)}.ir .l{flex:0 0 100px;font-size:11.5px}}
+
+/* ---- Greeting ---- */
+.greet{font-size:13px;color:#5C6B5F;font-weight:500;margin-bottom:6px;letter-spacing:.01em}
+.greet b{color:#1B4332;font-weight:600}
+
+/* ---- Polish: card hover, page fade ---- */
+.stat,.ec{transition:transform .18s ease,box-shadow .18s ease}
+.stat:hover,.ec:hover{transform:translateY(-2px);box-shadow:0 10px 26px -14px rgba(11,26,18,.22)}
+.card{transition:box-shadow .18s ease}
+.fade-in{animation:fadeIn .28s ease both}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+
+/* ---- Analytics hero (collection ring + monthly bars) ---- */
+.an-card{background:#FFFFFF;border:1px solid #E6ECE1;border-radius:8px;padding:22px 24px;margin-bottom:28px}
+.an-head{font-family:'Fraunces',serif;font-size:17px;font-weight:500;letter-spacing:-.01em;color:#0B1A12;display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.an-sub{font-size:12.5px;color:#5C6B5F;margin-bottom:20px}
+.an-grid{display:grid;grid-template-columns:200px 1fr;gap:28px;align-items:center}
+.an-ring{display:flex;flex-direction:column;align-items:center;gap:10px}
+.an-ring-svg{width:150px;height:150px}
+.an-ring-bg{fill:none;stroke:#E8ECE4;stroke-width:13}
+.an-ring-prog{fill:none;stroke:#1B4332;stroke-width:13;stroke-linecap:round;transition:stroke-dashoffset 1s cubic-bezier(.4,0,.2,1)}
+.an-ring-pct{font-family:'Fraunces',serif;font-size:30px;font-weight:500;fill:#0B1A12}
+.an-ring-cap{font-family:'Geist',sans-serif;font-size:10px;font-weight:500;fill:#5C6B5F;letter-spacing:.12em;text-transform:uppercase}
+.an-ring-info{text-align:center;font-size:12.5px;color:#5C6B5F;line-height:1.5}
+.an-ring-info b{color:#1F3024;font-family:'JetBrains Mono',monospace;font-weight:500}
+.an-bars-wrap{min-width:0}
+.an-bars-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+.an-bars-ttl{font-size:11.5px;color:#5C6B5F;letter-spacing:.08em;text-transform:uppercase;font-weight:500}
+.an-bars-peak{font-size:11.5px;color:#5C6B5F}
+.an-bars-peak b{color:#386641;font-family:'JetBrains Mono',monospace;font-weight:500}
+.an-bars{display:grid;grid-template-columns:repeat(12,1fr);gap:6px;height:130px;align-items:end}
+.an-bar-col{display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end;cursor:default}
+.an-bar-track{width:100%;flex:1;display:flex;align-items:flex-end;border-radius:5px 5px 0 0;background:#F2F5EF;overflow:hidden;min-height:2px}
+.an-bar-fill{width:100%;background:linear-gradient(180deg,#386641,#1B4332);border-radius:5px 5px 0 0;transform-origin:bottom;animation:growUp .7s cubic-bezier(.4,0,.2,1) both;min-height:2px}
+.an-bar-fill.zero{background:#E2E9DE}
+.an-bar-col:hover .an-bar-fill:not(.zero){filter:brightness(1.12)}
+.an-bar-lbl{font-size:10px;color:#8B9A8E;font-weight:500}
+@keyframes growUp{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+
+/* ---- Fee-status dot on student avatars ---- */
+.av-wrap{position:relative;flex-shrink:0;width:38px;height:38px}
+.fs-badge{position:absolute;bottom:-1px;right:-1px;width:12px;height:12px;border-radius:50%;border:2px solid #FFFFFF;box-sizing:border-box}
+.fs-badge.paid{background:#386641}
+.fs-badge.partial{background:#D29A3A}
+.fs-badge.unpaid{background:#BFC8B8}
+.fs-legend{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:14px;font-size:12px;color:#5C6B5F}
+.fs-legend .it{display:inline-flex;align-items:center;gap:6px}
+.fs-legend .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.fs-legend .dot.paid{background:#386641}
+.fs-legend .dot.partial{background:#D29A3A}
+.fs-legend .dot.unpaid{background:#BFC8B8}
+
+/* ---- Skeletons ---- */
+.skel{background:linear-gradient(90deg,#EDF1EA 25%,#E0E7DC 37%,#EDF1EA 63%);background-size:400% 100%;animation:shimmer 1.4s ease infinite;border-radius:7px}
+@keyframes shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
+.sk-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:28px}
+.sk-card{background:#FFFFFF;border:1px solid #E6ECE1;border-radius:8px;padding:22px}
+.sk-line{height:12px;margin-bottom:12px}
+.sk-row{background:#FFFFFF;border:1px solid #E6ECE1;border-radius:8px;padding:14px 18px;display:flex;align-items:center;gap:14px;margin-bottom:10px}
+.sk-circle{width:38px;height:38px;border-radius:50%;flex-shrink:0}
+
+@media (max-width:800px){
+  .an-grid{grid-template-columns:1fr;gap:22px}
+  .an-ring-svg{width:130px;height:130px}
+  .an-bars{height:110px;gap:4px}
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+}
 `;
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -399,6 +468,97 @@ const Avatar = ({ student, size = 'sm' }) => {
 };
 
 const crestInitial = (name) => name?.trim()?.[0]?.toUpperCase() || 'N';
+
+// Time-based greeting + tidy name from an email
+const greetWord = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
+const niceName = (email) => { const n = shortEmail(email); return n ? n.charAt(0).toUpperCase() + n.slice(1) : 'there'; };
+const todayLong = () => new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+// Current-month tuition status for a student: 'paid' | 'partial' | 'unpaid'
+const monthFeeStatus = (student, sp) => {
+  const yr = new Date().getFullYear();
+  const mo = MONTHS[new Date().getMonth()];
+  const paid = (sp || []).filter(p => (p.paymentType || PT_MONTHLY) === PT_MONTHLY && p.month === mo && p.year === yr).reduce((a, p) => a + (+p.amount || 0), 0);
+  const fee = +student.monthlyFee || 0;
+  if (fee > 0) { if (paid >= fee) return 'paid'; if (paid > 0) return 'partial'; return 'unpaid'; }
+  return paid > 0 ? 'paid' : 'unpaid';
+};
+
+// Collection ring — % of annual tuition collected this year
+function CollectionRing({ pct, collected, expected, currency }) {
+  const R = 56, C = 2 * Math.PI * R;
+  const [shown, setShown] = useState(0);
+  useEffect(() => { const t = setTimeout(() => setShown(Math.max(0, Math.min(100, pct))), 60); return () => clearTimeout(t); }, [pct]);
+  return (
+    <div className="an-ring">
+      <svg viewBox="0 0 140 140" className="an-ring-svg">
+        <circle className="an-ring-bg" cx="70" cy="70" r={R} />
+        <circle className="an-ring-prog" cx="70" cy="70" r={R} strokeDasharray={C} strokeDashoffset={C * (1 - shown / 100)} transform="rotate(-90 70 70)" />
+        <text className="an-ring-pct" x="70" y="68" textAnchor="middle" dominantBaseline="middle">{pct}%</text>
+        <text className="an-ring-cap" x="70" y="92" textAnchor="middle">collected</text>
+      </svg>
+      <div className="an-ring-info"><b>{fmt(collected, currency)}</b> of <b>{fmt(expected, currency)}</b><br />annual tuition</div>
+    </div>
+  );
+}
+
+// Monthly tuition bars (Jan–Dec)
+function MonthlyBars({ data, currency }) {
+  const max = Math.max(...data, 1);
+  const peak = Math.max(...data, 0);
+  return (
+    <div className="an-bars-wrap">
+      <div className="an-bars-top">
+        <span className="an-bars-ttl">Tuition collected per month · {new Date().getFullYear()}</span>
+        {peak > 0 && <span className="an-bars-peak">peak <b>{fmt(peak, currency)}</b></span>}
+      </div>
+      <div className="an-bars">
+        {data.map((v, i) => (
+          <div className="an-bar-col" key={i} title={`${MONTHS[i]}: ${fmt(v, currency)}`}>
+            <div className="an-bar-track">
+              <div className={`an-bar-fill ${v === 0 ? 'zero' : ''}`} style={{ height: `${Math.max(v === 0 ? 0 : 4, (v / max) * 100)}%`, animationDelay: `${i * 45}ms` }} />
+            </div>
+            <div className="an-bar-lbl">{M_SHORT[i][0]}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SkeletonScreen() {
+  return (
+    <div className="app">
+      <style>{CSS}</style>
+      <header className="hdr">
+        <div className="brand">
+          <div className="bmark">{crestInitial(SCHOOL_DEFAULT)}</div>
+          <div className="btxt"><div className="btit">{SCHOOL_DEFAULT}</div><div className="bsub">Admin Portal</div></div>
+        </div>
+      </header>
+      <main className="main">
+        <div className="skel sk-line" style={{ width: 180, height: 14, marginBottom: 10 }} />
+        <div className="skel" style={{ width: 260, height: 30, marginBottom: 26, borderRadius: 8 }} />
+        <div className="sk-stats">
+          {[0, 1, 2, 3].map(i => (
+            <div className="sk-card" key={i}>
+              <div className="skel sk-line" style={{ width: '55%' }} />
+              <div className="skel" style={{ width: '70%', height: 26, marginTop: 6 }} />
+            </div>
+          ))}
+        </div>
+        <div className="skel" style={{ width: '100%', height: 200, marginBottom: 26, borderRadius: 8 }} />
+        {[0, 1, 2, 3].map(i => (
+          <div className="sk-row" key={i}>
+            <div className="skel sk-circle" />
+            <div style={{ flex: 1 }}><div className="skel sk-line" style={{ width: '40%', marginBottom: 8 }} /><div className="skel sk-line" style={{ width: '25%', marginBottom: 0, height: 10 }} /></div>
+            <div className="skel" style={{ width: 70, height: 14 }} />
+          </div>
+        ))}
+      </main>
+    </div>
+  );
+}
 
 export default function App() {
   /* AUTH STATE
@@ -797,7 +957,7 @@ export default function App() {
   if (authState === 'reset_sent') return <InfoScreen title="Check your email" body="We've sent a password reset link. Click it to set a new password. After resetting, sign in with your new password." onContinue={() => setAuthState('signin')} />;
   if (authState === 'pending') return <PendingScreen email={user?.email || ''} onRecheck={recheckApproval} onSignOut={doSignOut} />;
 
-  if (loading) return <div className="app"><style>{CSS}</style><div className="ld">Loading your school data…</div></div>;
+  if (loading) return <SkeletonScreen />;
 
   const tabs = [
     { id: 'dashboard', l: 'Dashboard', ic: LayoutDashboard },
@@ -832,13 +992,15 @@ export default function App() {
       </header>
 
       <main className="main">
-        {page === 'dashboard' && <Dashboard stats={stats} settings={settings} students={students} payments={payments} byClass={byClass} onGo={go} onOpen={(id) => { setSelId(id); setPage('students'); }} />}
+       <div className="fade-in" key={sel ? 'detail' : page}>
+        {page === 'dashboard' && <Dashboard stats={stats} settings={settings} students={students} payments={payments} byClass={byClass} onGo={go} onOpen={(id) => { setSelId(id); setPage('students'); }} userEmail={userEmail} />}
         {page === 'students' && !sel && <StudentsList students={students} byClass={byClass} settings={settings} byStudent={byStudent} selClass={selClass} setSelClass={setSelClass} onOpen={setSelId} onAdd={() => setPage('add')} onDownloadAll={expAllStudents} onDownloadClass={expOneClassStudents} onDownloadAllCW={expCWStudents} onPromote={() => setShowPromote(true)} />}
         {page === 'students' && sel && <StudentDetail student={sel} settings={settings} payments={byStudent[sel.id] || []} vYear={vYear} setVYear={setVYear} onBack={() => setSelId(null)} onEdit={() => { setEditing(sel); setShowEdit(true); }} onDelete={() => setConfDel(sel.id)} onDelPay={delPay} onRecord={() => setPage('payments')} />}
         {page === 'add' && <AddStudent settings={settings} existing={students} onAdd={addStudent} onView={() => setPage('students')} onToast={tst} />}
         {page === 'payments' && <Payments students={students} payments={payments} settings={settings} byClass={byClass} fClass={pfClass} setFClass={setPfClass} fMonth={pfMonth} setFMonth={setPfMonth} fType={pfType} setFType={setPfType} onAdd={addPay} onDel={delPay} onOpen={(id) => { setSelId(id); setPage('students'); }} onDownloadAll={expAllPayments} onDownloadClass={expOneClassPayments} onDownloadAllCW={expCWPayments} />}
         {page === 'export' && <Export stats={stats} settings={settings} payments={payments} byClass={byClass} archivedPayments={archivedPayments} onCWStudents={expCWStudents} onAllStudents={expAllStudents} onCWPayments={expCWPayments} onAllPayments={expAllPayments} onFeeRegister={expFeeRegister} onFeeRegisterClass={expFeeRegisterClass} onArchivedRegister={expArchivedRegister} />}
         {page === 'settings' && <SettingsPage settings={settings} onSave={saveCfg} students={students} payments={payments} onClear={() => setConfClear(true)} onSignOut={doSignOut} onToast={tst} onOpenPromote={() => setShowPromote(true)} userEmail={userEmail} profile={profile} />}
+       </div>
       </main>
 
       <nav className="mnav">
@@ -1135,17 +1297,28 @@ function TeamManager({ userEmail, onToast }) {
 
 /* ========================  DASHBOARD  ======================== */
 
-function Dashboard({ stats, settings, students, payments, byClass, onGo, onOpen }) {
+function Dashboard({ stats, settings, students, payments, byClass, onGo, onOpen, userEmail }) {
   const recent = useMemo(() => [...payments].sort((a, b) => (b.recordedAt || b.paidDate || '').localeCompare(a.recordedAt || a.paidDate || '')).slice(0, 6), [payments]);
+  const yr = new Date().getFullYear();
+  // Monthly tuition collected per fee-month, this year
+  const monthly = useMemo(() => MONTHS.map(m => payments.filter(p => (p.paymentType || PT_MONTHLY) === PT_MONTHLY && p.month === m && p.year === yr).reduce((a, p) => a + (+p.amount || 0), 0)), [payments, yr]);
+  // Tuition collection rate: monthly tuition collected this year vs expected annual tuition
+  const collectedTuition = useMemo(() => payments.filter(p => (p.paymentType || PT_MONTHLY) === PT_MONTHLY && p.year === yr).reduce((a, p) => a + (+p.amount || 0), 0), [payments, yr]);
+  const expectedTuition = stats.expY;
+  const pct = expectedTuition > 0 ? Math.round((collectedTuition / expectedTuition) * 100) : 0;
   return (
     <>
       <div className="ph">
-        <div><h1 className="pt">Dashboard</h1><div className="ps">A snapshot of your school today.</div></div>
+        <div>
+          <div className="greet">{greetWord()}, <b>{niceName(userEmail)}</b> · {todayLong()}</div>
+          <h1 className="pt">Dashboard</h1>
+          <div className="ps">A snapshot of your school today.</div>
+        </div>
         <div className="acts"><button className="btn bp" onClick={() => onGo('add')}><UserPlus size={15} /> Add Student</button></div>
       </div>
       <div className="stats">
         <div className="stat"><div className="sl"><Users size={13} /> Total Students</div><div className="sv">{stats.tStud}</div><div className="sf">Across {CLASSES.filter(c => byClass[c].length).length} classes</div></div>
-        <div className="stat"><div className="sl"><Wallet size={13} /> Collected ({new Date().getFullYear()})</div><div className="sv"><span className="cur">{settings.currency}</span>{stats.yColl.toLocaleString()}</div><div className="sf">{payments.length} payment(s) recorded</div></div>
+        <div className="stat"><div className="sl"><Wallet size={13} /> Collected ({yr})</div><div className="sv"><span className="cur">{settings.currency}</span>{stats.yColl.toLocaleString()}</div><div className="sf">{payments.length} payment(s) recorded</div></div>
         <div className="stat"><div className="sl"><AlertCircle size={13} /> Outstanding (Year)</div><div className="sv" style={{ color: stats.out > 0 ? '#8B2E2E' : '#386641' }}><span className="cur">{settings.currency}</span>{stats.out.toLocaleString()}</div><div className="sf">Tuition expected: {fmt(stats.expY, settings.currency)}</div></div>
         <div className="stat"><div className="sl"><TrendingUp size={13} /> Monthly Tuition Expected</div><div className="sv"><span className="cur">{settings.currency}</span>{stats.expM.toLocaleString()}</div><div className="sf">If all students pay monthly fee</div></div>
       </div>
@@ -1158,6 +1331,14 @@ function Dashboard({ stats, settings, students, payments, byClass, onGo, onOpen 
         </div>
       ) : (
         <>
+          <div className="an-card">
+            <div className="an-head"><CircleDollarSign size={16} /> This year's tuition</div>
+            <div className="an-sub">How much of {yr}'s expected tuition you've collected, and the month-by-month picture.</div>
+            <div className="an-grid">
+              <CollectionRing pct={pct} collected={collectedTuition} expected={expectedTuition} currency={settings.currency} />
+              <MonthlyBars data={monthly} currency={settings.currency} />
+            </div>
+          </div>
           <div className="sec">Enrollment by class <span className="c">{stats.tStud} students</span></div>
           <div className="card" style={{ padding: 16, marginBottom: 28 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8 }}>
@@ -1244,16 +1425,27 @@ function StudentsList({ students, byClass, settings, byStudent, selClass, setSel
         ) : <div className="em"><div className="es" style={{ marginBottom: 0 }}>{q ? `No students match "${q}"` : `No students enrolled in Class ${selClass}`}</div></div>
       ) : (
         <div className="list">
+          <div className="fs-legend" style={{ padding: '12px 18px 0' }}>
+            <span style={{ fontWeight: 500, color: '#1F3024' }}>{MONTHS[new Date().getMonth()]} tuition:</span>
+            <span className="it"><span className="dot paid" /> Paid</span>
+            <span className="it"><span className="dot partial" /> Partial</span>
+            <span className="it"><span className="dot unpaid" /> Unpaid</span>
+          </div>
           <div className="lr h"><div className="lh">Roll</div><div className="lh">Student</div><div className="lh">Parent Contact</div><div className="lh">Paid (Year)</div><div></div></div>
           {list.map(s => {
             const sp = byStudent[s.id] || [];
             const yr = new Date().getFullYear();
             const yp = sp.filter(p => p.year == yr).reduce((a, p) => a + (+p.amount || 0), 0);
+            const fstat = monthFeeStatus(s, sp);
+            const fstatLabel = fstat === 'paid' ? 'paid' : fstat === 'partial' ? 'partially paid' : 'unpaid';
             return (
               <div key={s.id} className="lr" onClick={() => onOpen(s.id)}>
                 <div className="rn">{s.rollNumber || '—'}</div>
                 <div className="cn">
-                  <Avatar student={s} />
+                  <div className="av-wrap" title={`${MONTHS[new Date().getMonth()]} tuition: ${fstatLabel}`}>
+                    <Avatar student={s} />
+                    <span className={`fs-badge ${fstat}`} />
+                  </div>
                   <div className="cnt"><div className="n">{s.fullName}</div><div className="m">Class {s.studentClass}{s.section ? ` · ${s.section}` : ''} {s.gender ? `· ${s.gender}` : ''}</div></div>
                 </div>
                 <div className="cc">{s.parentPhone || s.motherPhone || s.parentName || '—'}</div>

@@ -10,6 +10,7 @@ import {
 import * as XLSX from 'xlsx';
 import { supabase } from './supabase';
 import * as api from './api';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 const CLASSES = ['Play','Nursery','KG','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten'];
 const SECTION_CLASSES = ['Nine', 'Ten'];
@@ -879,6 +880,7 @@ export default function App() {
       )}
 
       {toast && <div className={`toast ${toast.type === 'err' ? 'err' : ''}`}>{toast.type === 'err' ? <AlertCircle size={16} /> : <CheckCircle2 size={16} />} {toast.msg}</div>}
+      <SpeedInsights />
     </div>
   );
 }

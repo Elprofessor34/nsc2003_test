@@ -396,7 +396,7 @@ body,.app{font-family:'Geist',system-ui,sans-serif;background:#F2F5EF;color:#0B1
 }
 `;
 
-const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const uid = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const ini = (n) => { if (!n) return '?'; const p = n.trim().split(/\s+/); return (p[0][0] + (p[1]?.[0] || '')).toUpperCase(); };
 const AC = ['', 'g', 'o', 'r', 'b'];
 const ac = (id) => AC[(parseInt((id || '').slice(-2), 36) || 0) % AC.length];
@@ -560,7 +560,31 @@ function SkeletonScreen() {
   );
 }
 
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  componentDidCatch(err, info) { console.error('App error caught by boundary:', err, info); }
+  render() {
+    if (this.state.err) {
+      return (
+        <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', fontFamily: 'system-ui, sans-serif', background: '#F2F5EF', padding: 24 }}>
+          <div style={{ maxWidth: 420, textAlign: 'center', background: '#fff', border: '1px solid #E6ECE1', borderRadius: 12, padding: 32, boxShadow: '0 12px 32px -12px rgba(11,26,18,.2)' }}>
+            <div style={{ fontSize: 19, fontWeight: 600, color: '#1B4332', marginBottom: 8 }}>Something went wrong</div>
+            <div style={{ fontSize: 14, color: '#5C6B5F', marginBottom: 22, lineHeight: 1.55 }}>The page hit an unexpected error. Your saved data is safe in the cloud — just reload to continue.</div>
+            <button onClick={() => window.location.reload()} style={{ padding: '12px 22px', fontSize: 14, fontWeight: 500, background: '#1B4332', color: '#FAFBF7', border: 'none', borderRadius: 8, cursor: 'pointer' }}>Reload the page</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
+  return <ErrorBoundary><AppInner /></ErrorBoundary>;
+}
+
+function AppInner() {
   /* AUTH STATE
      'loading'        - checking session
      'signin'         - sign in screen
@@ -652,17 +676,40 @@ export default function App() {
       if (!cancelled) setLoading(false);
     })();
 
-    const studCh = supabase.channel('rt-students').on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, async () => {
-      try { const sts = await api.listStudents(); setStudents(sts); } catch {}
-    }).subscribe();
-    const payCh = supabase.channel('rt-payments').on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, async () => {
-      try { const [pys, arch] = await Promise.all([api.listPayments(), api.listArchivedPayments()]); setPayments(pys); setArchivedPayments(arch); } catch {}
-    }).subscribe();
-    const cfgCh = supabase.channel('rt-settings').on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, async () => {
-      try { const cfg = await api.getSettings(); if (cfg) setSettings(s => ({ ...s, ...cfg })); } catch {}
-    }).subscribe();
+    // Debounced, non-overlapping refetchers. A burst of inserts (e.g. adding students
+    // quickly) collapses into a single reload instead of one reload per row, which
+    // prevents the UI from choking and reloads from resolving out of order.
+    let stTimer, pyTimer, cfgTimer;
+    let stBusy = false, stAgain = false;
+    const refStudents = async () => {
+      if (stBusy) { stAgain = true; return; }
+      stBusy = true;
+      try { const sts = await api.listStudents(); if (!cancelled) setStudents(sts); } catch {}
+      stBusy = false;
+      if (stAgain && !cancelled) { stAgain = false; refStudents(); }
+    };
+    let pyBusy = false, pyAgain = false;
+    const refPayments = async () => {
+      if (pyBusy) { pyAgain = true; return; }
+      pyBusy = true;
+      try { const [pys, arch] = await Promise.all([api.listPayments(), api.listArchivedPayments()]); if (!cancelled) { setPayments(pys); setArchivedPayments(arch); } } catch {}
+      pyBusy = false;
+      if (pyAgain && !cancelled) { pyAgain = false; refPayments(); }
+    };
+    const refSettings = async () => {
+      try { const cfg = await api.getSettings(); if (cfg && !cancelled) setSettings(s => ({ ...s, ...cfg })); } catch {}
+    };
+    const bounce = (which) => {
+      if (which === 'st') { clearTimeout(stTimer); stTimer = setTimeout(refStudents, 450); }
+      else if (which === 'py') { clearTimeout(pyTimer); pyTimer = setTimeout(refPayments, 450); }
+      else { clearTimeout(cfgTimer); cfgTimer = setTimeout(refSettings, 450); }
+    };
 
-    return () => { cancelled = true; supabase.removeChannel(studCh); supabase.removeChannel(payCh); supabase.removeChannel(cfgCh); };
+    const studCh = supabase.channel('rt-students').on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => bounce('st')).subscribe();
+    const payCh = supabase.channel('rt-payments').on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => bounce('py')).subscribe();
+    const cfgCh = supabase.channel('rt-settings').on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => bounce('cfg')).subscribe();
+
+    return () => { cancelled = true; clearTimeout(stTimer); clearTimeout(pyTimer); clearTimeout(cfgTimer); supabase.removeChannel(studCh); supabase.removeChannel(payCh); supabase.removeChannel(cfgCh); };
   }, [authState]);
 
   const tst = (m, type) => { setToast({ msg: m, type: type || 'ok' }); setTimeout(() => setToast(null), 2800); };
@@ -703,7 +750,7 @@ export default function App() {
     const student = { id, ...rest, hasPhoto, photoUrl };
     try {
       const saved = await api.addStudent(student);
-      setStudents(s => [...s, saved]);
+      setStudents(s => s.some(x => x.id === saved.id) ? s : [...s, saved]);
       tst(`${data.fullName} added to Class ${data.studentClass}`);
     } catch (e) {
       console.error(e);
@@ -753,7 +800,7 @@ export default function App() {
     const newPay = { id, ...data, recordedBy: userEmail };
     try {
       const saved = await api.addPayment(newPay);
-      setPayments(p => [saved, ...p]);
+      setPayments(p => p.some(x => x.id === saved.id) ? p : [saved, ...p]);
       const s = students.find(x => x.id === data.studentId);
       tst(`Payment recorded for ${s?.fullName || 'student'}`);
     } catch (e) {

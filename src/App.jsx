@@ -401,7 +401,7 @@ const ini = (n) => { if (!n) return '?'; const p = n.trim().split(/\s+/); return
 const AC = ['', 'g', 'o', 'r', 'b'];
 const ac = (id) => AC[(parseInt((id || '').slice(-2), 36) || 0) % AC.length];
 const fmt = (n, c) => `${c} ${(Number(n) || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const shortEmail = (e) => { if (!e) return 'unknown'; const at = e.indexOf('@'); return at > 0 ? e.slice(0, at) : e; };
 const fmtDT = (iso) => { if (!iso) return ''; try { const d = new Date(iso); return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch { return iso; } };
 
@@ -785,6 +785,7 @@ function AppInner() {
       await api.deleteStudent(id);
       setStudents(prev => prev.filter(x => x.id !== id));
       setPayments(prev => prev.filter(p => p.studentId !== id));
+      setArchivedPayments(prev => prev.filter(p => p.studentId !== id));
       setConfDel(null);
       if (selId === id) setSelId(null);
       tst(`${s?.fullName || 'Student'} removed`);
@@ -899,10 +900,13 @@ function AppInner() {
     const tColl = payments.reduce((a, p) => a + (+p.amount || 0), 0);
     const yr = new Date().getFullYear();
     const yColl = payments.filter(p => p.year == yr).reduce((a, p) => a + (+p.amount || 0), 0);
+    // Tuition collected this year (monthly only) — used for the outstanding figure so it
+    // isn't distorted by session/term fees, and stays consistent with the collection ring.
+    const tuitionColl = payments.filter(p => (p.paymentType || PT_MONTHLY) === PT_MONTHLY && p.year == yr).reduce((a, p) => a + (+p.amount || 0), 0);
     const expM = students.reduce((a, s) => a + (+s.monthlyFee || 0), 0);
     const expY = expM * 12;
-    const out = Math.max(0, expY - yColl);
-    return { tStud, tColl, yColl, expM, expY, out };
+    const out = Math.max(0, expY - tuitionColl);
+    return { tStud, tColl, yColl, tuitionColl, expM, expY, out };
   }, [students, payments]);
 
   const sel = selId ? students.find(s => s.id === selId) : null;

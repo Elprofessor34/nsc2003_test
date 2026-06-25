@@ -259,3 +259,9 @@ export const setApproval = async (id, approved) => {
   const { error } = await supabase.from('profiles').update({ approved }).eq('id', id)
   if (error) throw error
 }
+
+// Promote/demote between Admin (full access) and Operator (students only).
+export const setAdmin = async (id, isAdmin) => {
+  const { error } = await supabase.from('profiles').update({ is_admin: isAdmin }).eq('id', id)
+  if (error) throw error
+}

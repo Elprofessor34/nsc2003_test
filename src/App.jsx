@@ -104,6 +104,7 @@ body,.app{font-family:'Geist',system-ui,sans-serif;background:#F2F5EF;color:#0B1
 
 .list{background:#FFFFFF;border:1px solid #E6ECE1;border-radius:8px;overflow:hidden}
 .lr{display:grid;grid-template-columns:56px minmax(0,2.2fr) minmax(0,1.2fr) minmax(0,1fr) 32px;gap:14px;padding:14px 18px;align-items:center;border-bottom:1px solid #F0F4ED;cursor:pointer;transition:background .12s}
+.lr.nofee{grid-template-columns:56px minmax(0,2.2fr) minmax(0,1fr) 32px}
 .lr:last-child{border-bottom:none}
 .lr:hover{background:#FAFBF7}
 .lr.h{background:#FAFBF7;cursor:default;padding:11px 18px}
@@ -311,7 +312,7 @@ body,.app{font-family:'Geist',system-ui,sans-serif;background:#F2F5EF;color:#0B1
 @media (max-width:800px){
   .hdr{padding:14px 16px}.hdr .nav{display:none}.main{padding:22px 16px 100px}.pt{font-size:26px}
   .stats{grid-template-columns:1fr;gap:10px;margin-bottom:24px}.stat{padding:18px}.sv{font-size:26px}
-  .lr{grid-template-columns:44px 1fr auto;gap:10px;padding:13px 14px}.lr.h{display:none}.cc{display:none}.chev{display:none}
+  .lr{grid-template-columns:44px 1fr auto;gap:10px;padding:13px 14px}.lr.nofee{grid-template-columns:44px 1fr auto}.lr.h{display:none}.cc{display:none}.chev{display:none}
   .fr2,.fr3{grid-template-columns:1fr}.pn{grid-template-columns:1fr}.mg{grid-template-columns:repeat(3,1fr)}.sfg{grid-template-columns:repeat(2,1fr)}
   .dh{padding:18px;gap:14px}.da{width:64px;height:64px;font-size:22px}.dn{font-size:22px}
   .mf{flex-direction:column-reverse}.mf .btn{width:100%;justify-content:center}.eg{grid-template-columns:1fr}
@@ -394,6 +395,43 @@ body,.app{font-family:'Geist',system-ui,sans-serif;background:#F2F5EF;color:#0B1
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
 }
+
+/* ============================================================
+   PREMIUM REFINEMENT PASS
+   Direction: established academic institution — deep forest
+   green + a restrained brass "seal" accent, finer paper depth,
+   and more deliberate typography. Pure styling, no logic.
+   ============================================================ */
+body,.app{font-optical-sizing:auto;text-rendering:optimizeLegibility}
+
+/* Brass seal on the crest / monogram (the one signature accent) */
+.bmark{background:linear-gradient(155deg,#23543C 0%,#143026 100%);box-shadow:inset 0 0 0 1px rgba(201,168,106,.32),inset 0 1px 0 rgba(255,255,255,.10),0 2px 6px rgba(11,26,18,.16)}
+.auth-crest{background:linear-gradient(155deg,#23543C 0%,#123025 100%);box-shadow:inset 0 0 0 1px rgba(201,168,106,.30),0 16px 36px -10px rgba(20,48,38,.42),0 2px 4px rgba(11,26,18,.12)}
+.auth-crest::after{border-color:rgba(201,168,106,.42)}
+.auth-tag::before,.auth-tag::after{color:#A8824A;opacity:.85}
+
+/* Softer, layered "fine paper" depth on the main surfaces */
+.stat,.card,.fs,.list,.ec,.dh{box-shadow:0 1px 2px rgba(11,26,18,.03),0 12px 28px -20px rgba(11,26,18,.14)}
+.stat:hover,.ec:hover{box-shadow:0 2px 5px rgba(11,26,18,.05),0 18px 36px -16px rgba(11,26,18,.20)}
+.an-card{box-shadow:inset 0 2px 0 #B49164,0 1px 2px rgba(11,26,18,.03),0 14px 30px -20px rgba(11,26,18,.16)}
+
+/* Refined top bar */
+.hdr{border-bottom-color:#E0E7DB;box-shadow:0 1px 16px -11px rgba(11,26,18,.22)}
+
+/* Primary actions get quiet depth */
+.bp{background:linear-gradient(180deg,#23543C 0%,#1B4332 100%);box-shadow:0 1px 2px rgba(11,26,18,.16),inset 0 1px 0 rgba(255,255,255,.07)}
+.bp:hover:not(:disabled){background:linear-gradient(180deg,#1B4332 0%,#0F2E20 100%)}
+.auth-btn{background:linear-gradient(180deg,#23543C 0%,#1B4332 100%);box-shadow:0 3px 10px -3px rgba(20,48,38,.42),inset 0 1px 0 rgba(255,255,255,.08)}
+.auth-btn:hover:not(:disabled){background:linear-gradient(180deg,#1B4332 0%,#0F2E20 100%)}
+
+/* Premium sign-in canvas: soft radial light + the faintest paper texture */
+.auth{background:radial-gradient(135% 95% at 50% -10%,#FFFFFF 0%,#F2F5EF 48%,#E3ECDF 100%)}
+.auth::after{content:'';position:absolute;inset:0;background-image:radial-gradient(rgba(27,67,50,.05) 1px,transparent 1px);background-size:24px 24px;pointer-events:none;z-index:0}
+.auth-inner{position:relative;z-index:1}
+
+/* Calmer focus ring + deeper heading ink */
+.fd input:focus,.fd select:focus,.fd textarea:focus,.sr input:focus,.auth-field input:focus{box-shadow:0 0 0 3px rgba(56,102,65,.16)}
+.an-head,.sec,.pt,.dn,.mt,.et{color:#102218}
 `;
 
 const uid = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
@@ -658,11 +696,18 @@ function AppInner() {
 
   const refetchAll = async () => {
     try {
-      const [sts, pys, arch, cfg] = await Promise.all([api.listStudents(), api.listPayments(), api.listArchivedPayments(), api.getSettings()]);
+      const [sts, cfg] = await Promise.all([api.listStudents(), api.getSettings()]);
       setStudents(sts);
-      setPayments(pys);
-      setArchivedPayments(arch);
       if (cfg) setSettings(s => ({ ...s, ...cfg }));
+      // Payments are admin-only (also enforced by the database). Operators never load them.
+      if (isAdmin) {
+        const [pys, arch] = await Promise.all([api.listPayments(), api.listArchivedPayments()]);
+        setPayments(pys);
+        setArchivedPayments(arch);
+      } else {
+        setPayments([]);
+        setArchivedPayments([]);
+      }
     } catch (e) { console.error(e); }
   };
 
@@ -706,10 +751,10 @@ function AppInner() {
     };
 
     const studCh = supabase.channel('rt-students').on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => bounce('st')).subscribe();
-    const payCh = supabase.channel('rt-payments').on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => bounce('py')).subscribe();
+    const payCh = isAdmin ? supabase.channel('rt-payments').on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => bounce('py')).subscribe() : null;
     const cfgCh = supabase.channel('rt-settings').on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => bounce('cfg')).subscribe();
 
-    return () => { cancelled = true; clearTimeout(stTimer); clearTimeout(pyTimer); clearTimeout(cfgTimer); supabase.removeChannel(studCh); supabase.removeChannel(payCh); supabase.removeChannel(cfgCh); };
+    return () => { cancelled = true; clearTimeout(stTimer); clearTimeout(pyTimer); clearTimeout(cfgTimer); supabase.removeChannel(studCh); if (payCh) supabase.removeChannel(payCh); supabase.removeChannel(cfgCh); };
   }, [authState]);
 
   const tst = (m, type) => { setToast({ msg: m, type: type || 'ok' }); setTimeout(() => setToast(null), 2800); };
@@ -1010,7 +1055,9 @@ function AppInner() {
 
   if (loading) return <SkeletonScreen />;
 
-  const tabs = [
+  // Role: admins see everything; operators (approved, non-admin) manage students only.
+  const isAdmin = !!profile?.isAdmin;
+  const allTabs = [
     { id: 'dashboard', l: 'Dashboard', ic: LayoutDashboard },
     { id: 'students', l: 'Students', ic: Users },
     { id: 'add', l: 'Add Student', ic: UserPlus },
@@ -1018,6 +1065,9 @@ function AppInner() {
     { id: 'export', l: 'Export', ic: FileSpreadsheet },
     { id: 'settings', l: 'Settings', ic: Cog }
   ];
+  const tabs = isAdmin ? allTabs : allTabs.filter(t => t.id !== 'payments' && t.id !== 'export');
+  // If an operator is somehow pointed at a money page, fall back to the dashboard.
+  const safePage = (!isAdmin && (page === 'payments' || page === 'export')) ? 'dashboard' : page;
   const go = (p) => { setPage(p); setSelId(null); };
 
   return (
@@ -1028,12 +1078,12 @@ function AppInner() {
           <div className="bmark">{crestInitial(settings.schoolName)}</div>
           <div className="btxt">
             <div className="btit">{settings.schoolName}</div>
-            <div className="bsub">Admin Portal · {settings.academicYear}</div>
+            <div className="bsub">{isAdmin ? 'Admin Portal' : 'Staff Portal'} · {settings.academicYear}</div>
           </div>
         </div>
         <nav className="nav">
           {tabs.map(t => (
-            <button key={t.id} className={`nb ${page === t.id ? 'on' : ''}`} onClick={() => go(t.id)}>
+            <button key={t.id} className={`nb ${safePage === t.id ? 'on' : ''}`} onClick={() => go(t.id)}>
               <t.ic size={14} /> {t.l}
             </button>
           ))}
@@ -1043,26 +1093,26 @@ function AppInner() {
       </header>
 
       <main className="main">
-       <div className="fade-in" key={sel ? 'detail' : page}>
-        {page === 'dashboard' && <Dashboard stats={stats} settings={settings} students={students} payments={payments} byClass={byClass} onGo={go} onOpen={(id) => { setSelId(id); setPage('students'); }} userEmail={userEmail} />}
-        {page === 'students' && !sel && <StudentsList students={students} byClass={byClass} settings={settings} byStudent={byStudent} selClass={selClass} setSelClass={setSelClass} onOpen={setSelId} onAdd={() => setPage('add')} onDownloadAll={expAllStudents} onDownloadClass={expOneClassStudents} onDownloadAllCW={expCWStudents} onPromote={() => setShowPromote(true)} />}
-        {page === 'students' && sel && <StudentDetail student={sel} settings={settings} payments={byStudent[sel.id] || []} vYear={vYear} setVYear={setVYear} onBack={() => setSelId(null)} onEdit={() => { setEditing(sel); setShowEdit(true); }} onDelete={() => setConfDel(sel.id)} onDelPay={delPay} onRecord={() => setPage('payments')} />}
-        {page === 'add' && <AddStudent settings={settings} existing={students} onAdd={addStudent} onView={() => setPage('students')} onToast={tst} />}
-        {page === 'payments' && <Payments students={students} payments={payments} settings={settings} byClass={byClass} fClass={pfClass} setFClass={setPfClass} fMonth={pfMonth} setFMonth={setPfMonth} fType={pfType} setFType={setPfType} onAdd={addPay} onDel={delPay} onOpen={(id) => { setSelId(id); setPage('students'); }} onDownloadAll={expAllPayments} onDownloadClass={expOneClassPayments} onDownloadAllCW={expCWPayments} />}
-        {page === 'export' && <Export stats={stats} settings={settings} payments={payments} byClass={byClass} archivedPayments={archivedPayments} onCWStudents={expCWStudents} onAllStudents={expAllStudents} onCWPayments={expCWPayments} onAllPayments={expAllPayments} onFeeRegister={expFeeRegister} onFeeRegisterClass={expFeeRegisterClass} onArchivedRegister={expArchivedRegister} />}
-        {page === 'settings' && <SettingsPage settings={settings} onSave={saveCfg} students={students} payments={payments} onClear={() => setConfClear(true)} onSignOut={doSignOut} onToast={tst} onOpenPromote={() => setShowPromote(true)} userEmail={userEmail} profile={profile} />}
+       <div className="fade-in" key={sel ? 'detail' : safePage}>
+        {safePage === 'dashboard' && <Dashboard stats={stats} settings={settings} students={students} payments={payments} byClass={byClass} onGo={go} onOpen={(id) => { setSelId(id); setPage('students'); }} userEmail={userEmail} isAdmin={isAdmin} />}
+        {safePage === 'students' && !sel && <StudentsList students={students} byClass={byClass} settings={settings} byStudent={byStudent} selClass={selClass} setSelClass={setSelClass} onOpen={setSelId} onAdd={() => setPage('add')} onDownloadAll={expAllStudents} onDownloadClass={expOneClassStudents} onDownloadAllCW={expCWStudents} onPromote={() => setShowPromote(true)} isAdmin={isAdmin} />}
+        {safePage === 'students' && sel && <StudentDetail student={sel} settings={settings} payments={byStudent[sel.id] || []} vYear={vYear} setVYear={setVYear} onBack={() => setSelId(null)} onEdit={() => { setEditing(sel); setShowEdit(true); }} onDelete={() => setConfDel(sel.id)} onDelPay={delPay} onRecord={() => setPage('payments')} isAdmin={isAdmin} />}
+        {safePage === 'add' && <AddStudent settings={settings} existing={students} onAdd={addStudent} onView={() => setPage('students')} onToast={tst} isAdmin={isAdmin} />}
+        {safePage === 'payments' && isAdmin && <Payments students={students} payments={payments} settings={settings} byClass={byClass} fClass={pfClass} setFClass={setPfClass} fMonth={pfMonth} setFMonth={setPfMonth} fType={pfType} setFType={setPfType} onAdd={addPay} onDel={delPay} onOpen={(id) => { setSelId(id); setPage('students'); }} onDownloadAll={expAllPayments} onDownloadClass={expOneClassPayments} onDownloadAllCW={expCWPayments} />}
+        {safePage === 'export' && isAdmin && <Export stats={stats} settings={settings} payments={payments} byClass={byClass} archivedPayments={archivedPayments} onCWStudents={expCWStudents} onAllStudents={expAllStudents} onCWPayments={expCWPayments} onAllPayments={expAllPayments} onFeeRegister={expFeeRegister} onFeeRegisterClass={expFeeRegisterClass} onArchivedRegister={expArchivedRegister} />}
+        {safePage === 'settings' && <SettingsPage settings={settings} onSave={saveCfg} students={students} payments={payments} onClear={() => setConfClear(true)} onSignOut={doSignOut} onToast={tst} onOpenPromote={() => setShowPromote(true)} userEmail={userEmail} profile={profile} isAdmin={isAdmin} />}
        </div>
       </main>
 
       <nav className="mnav">
         {tabs.map(t => (
-          <button key={t.id} className={page === t.id ? 'on' : ''} onClick={() => go(t.id)}>
+          <button key={t.id} className={safePage === t.id ? 'on' : ''} onClick={() => go(t.id)}>
             <t.ic size={18} /><span>{t.l.split(' ')[0]}</span>
           </button>
         ))}
       </nav>
 
-      {showEdit && editing && <StudentForm student={editing} settings={settings} existing={students} onClose={() => { setShowEdit(false); setEditing(null); }} onSave={updStudent} onToast={tst} />}
+      {showEdit && editing && <StudentForm student={editing} settings={settings} existing={students} onClose={() => { setShowEdit(false); setEditing(null); }} onSave={updStudent} onToast={tst} isAdmin={isAdmin} />}
       {showPromote && <PromoteModal byClass={byClass} onClose={() => setShowPromote(false)} onPromote={promote} currency={settings.currency} />}
 
       {confDel && (
@@ -1279,8 +1329,19 @@ function TeamManager({ userEmail, onToast }) {
     try {
       await api.setApproval(id, approved);
       setProfiles(ps => ps.map(p => p.id === id ? { ...p, approved } : p));
-      onToast(approved ? 'Access approved' : 'Access revoked');
+      onToast(approved ? 'Access approved (Operator)' : 'Access revoked');
     } catch (e) { console.error(e); onToast('Could not update access', 'err'); }
+    setBusyId(null);
+  };
+
+  // Switch a person between Admin (full access) and Operator (students only).
+  const setRole = async (id, makeAdmin) => {
+    setBusyId(id);
+    try {
+      await api.setAdmin(id, makeAdmin);
+      setProfiles(ps => ps.map(p => p.id === id ? { ...p, isAdmin: makeAdmin } : p));
+      onToast(makeAdmin ? 'Promoted to Admin' : 'Changed to Operator');
+    } catch (e) { console.error(e); onToast('Could not change role', 'err'); }
     setBusyId(null);
   };
 
@@ -1290,7 +1351,7 @@ function TeamManager({ userEmail, onToast }) {
   return (
     <div className="fs" style={{ maxWidth: 600 }}>
       <div className="fst"><ShieldCheck size={16} /> Team Access</div>
-      <div className="fss">Anyone can create an account from the sign-in page, but they get no access until you approve them here. This keeps students or strangers who find the site from seeing or changing data.</div>
+      <div className="fss">Anyone can create an account from the sign-in page, but they get no access until you approve them here. New people are approved as <strong>Operators</strong> — they can add and edit students but cannot see any payments, earnings, or fees. Promote someone to <strong>Admin</strong> to give full access.</div>
 
       {profiles === null ? (
         <div style={{ color: '#5C6B5F', fontSize: 13, padding: '8px 0' }}>Loading team…</div>
@@ -1320,25 +1381,32 @@ function TeamManager({ userEmail, onToast }) {
 
           {/* Approved */}
           <div className="fst" style={{ fontSize: 14, marginTop: 8, marginBottom: 8, color: '#1F3024' }}>
-            <Users size={14} /> Approved Admins {approved.length > 0 && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, background: '#D8E5D5', color: '#1B4332', padding: '2px 7px', borderRadius: 10 }}>{approved.length}</span>}
+            <Users size={14} /> Approved Team {approved.length > 0 && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, background: '#D8E5D5', color: '#1B4332', padding: '2px 7px', borderRadius: 10 }}>{approved.length}</span>}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {approved.map(p => {
               const isSelf = p.email === userEmail;
               return (
-                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#FFFFFF', border: '1px solid #E6ECE1', borderRadius: 7, padding: '10px 12px' }}>
-                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#D8E5D5', color: '#1B4332', display: 'grid', placeItems: 'center', flexShrink: 0 }}><UserCheck size={15} /></div>
+                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#FFFFFF', border: '1px solid #E6ECE1', borderRadius: 7, padding: '10px 12px', flexWrap: 'wrap' }}>
+                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: p.isAdmin ? '#D8E5D5' : '#EDEFE6', color: p.isAdmin ? '#1B4332' : '#5C6B2F', display: 'grid', placeItems: 'center', flexShrink: 0 }}>{p.isAdmin ? <ShieldCheck size={15} /> : <User size={15} />}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 500, color: '#0B1A12', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.email} {isSelf && <span style={{ fontSize: 11, color: '#386641', fontWeight: 500 }}>· you</span>}</div>
-                    <div style={{ fontSize: 11.5, color: '#5C6B5F' }}>Joined {p.createdAt ? fmtDT(p.createdAt) : '—'}</div>
+                    <div style={{ fontSize: 11.5, color: '#5C6B5F', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontWeight: 600, color: p.isAdmin ? '#1B4332' : '#5C6B2F', letterSpacing: '.03em', textTransform: 'uppercase', fontSize: 10.5 }}>{p.isAdmin ? 'Admin' : 'Operator'}</span>
+                      · Joined {p.createdAt ? fmtDT(p.createdAt) : '—'}
+                    </div>
                   </div>
-                  {!isSelf && <button className="btn bg sm" onClick={() => approve(p.id, false)} disabled={busyId === p.id} title="Revoke access"><UserX size={13} /> Revoke</button>}
+                  {!isSelf && (p.isAdmin
+                    ? <button className="btn bg sm" onClick={() => setRole(p.id, false)} disabled={busyId === p.id} title="Remove admin access (students only)"><User size={13} /> Make Operator</button>
+                    : <button className="btn bg sm" onClick={() => setRole(p.id, true)} disabled={busyId === p.id} title="Give full access"><ShieldCheck size={13} /> Make Admin</button>
+                  )}
+                  {!isSelf && <button className="btn bd sm" onClick={() => approve(p.id, false)} disabled={busyId === p.id} title="Revoke access"><UserX size={13} /> Revoke</button>}
                 </div>
               );
             })}
           </div>
           <div style={{ fontSize: 11.5, color: '#8B9A8E', marginTop: 14, lineHeight: 1.6 }}>
-            Revoking access locks a person out immediately but keeps their record. To delete an account entirely, remove the user from the Supabase dashboard.
+            <strong style={{ color: '#5C6B5F' }}>Operators</strong> can manage students but never see payments, earnings, or fees. <strong style={{ color: '#5C6B5F' }}>Admins</strong> see everything. Revoking locks a person out immediately but keeps their record; to delete an account entirely, remove the user from the Supabase dashboard.
           </div>
         </>
       )}
@@ -1348,7 +1416,7 @@ function TeamManager({ userEmail, onToast }) {
 
 /* ========================  DASHBOARD  ======================== */
 
-function Dashboard({ stats, settings, students, payments, byClass, onGo, onOpen, userEmail }) {
+function Dashboard({ stats, settings, students, payments, byClass, onGo, onOpen, userEmail, isAdmin }) {
   const recent = useMemo(() => [...payments].sort((a, b) => (b.recordedAt || b.paidDate || '').localeCompare(a.recordedAt || a.paidDate || '')).slice(0, 6), [payments]);
   const yr = new Date().getFullYear();
   // Monthly tuition collected per fee-month, this year
@@ -1369,9 +1437,11 @@ function Dashboard({ stats, settings, students, payments, byClass, onGo, onOpen,
       </div>
       <div className="stats">
         <div className="stat"><div className="sl"><Users size={13} /> Total Students</div><div className="sv">{stats.tStud}</div><div className="sf">Across {CLASSES.filter(c => byClass[c].length).length} classes</div></div>
+        {isAdmin && <>
         <div className="stat"><div className="sl"><Wallet size={13} /> Collected ({yr})</div><div className="sv"><span className="cur">{settings.currency}</span>{stats.yColl.toLocaleString()}</div><div className="sf">{payments.length} payment(s) recorded</div></div>
         <div className="stat"><div className="sl"><AlertCircle size={13} /> Outstanding (Year)</div><div className="sv" style={{ color: stats.out > 0 ? '#8B2E2E' : '#386641' }}><span className="cur">{settings.currency}</span>{stats.out.toLocaleString()}</div><div className="sf">Tuition expected: {fmt(stats.expY, settings.currency)}</div></div>
         <div className="stat"><div className="sl"><TrendingUp size={13} /> Monthly Tuition Expected</div><div className="sv"><span className="cur">{settings.currency}</span>{stats.expM.toLocaleString()}</div><div className="sf">If all students pay monthly fee</div></div>
+        </>}
       </div>
       {students.length === 0 ? (
         <div className="em">
@@ -1382,14 +1452,14 @@ function Dashboard({ stats, settings, students, payments, byClass, onGo, onOpen,
         </div>
       ) : (
         <>
-          <div className="an-card">
+          {isAdmin && <div className="an-card">
             <div className="an-head"><CircleDollarSign size={16} /> This year's tuition</div>
             <div className="an-sub">How much of {yr}'s expected tuition you've collected, and the month-by-month picture.</div>
             <div className="an-grid">
               <CollectionRing pct={pct} collected={collectedTuition} expected={expectedTuition} currency={settings.currency} />
               <MonthlyBars data={monthly} currency={settings.currency} />
             </div>
-          </div>
+          </div>}
           <div className="sec">Enrollment by class <span className="c">{stats.tStud} students</span></div>
           <div className="card" style={{ padding: 16, marginBottom: 28 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8 }}>
@@ -1404,7 +1474,7 @@ function Dashboard({ stats, settings, students, payments, byClass, onGo, onOpen,
               })}
             </div>
           </div>
-          <div className="sec">Recent payments <span className="c">Last 6</span></div>
+          {isAdmin && <><div className="sec">Recent payments <span className="c">Last 6</span></div>
           {recent.length === 0 ? <div className="em" style={{ padding: '32px 24px' }}><div className="es" style={{ marginBottom: 0 }}>No payments recorded yet.</div></div> :
             <div className="list">
               {recent.map(p => {
@@ -1420,7 +1490,7 @@ function Dashboard({ stats, settings, students, payments, byClass, onGo, onOpen,
                   </div>
                 );
               })}
-            </div>}
+            </div>}</>}
         </>
       )}
     </>
@@ -1429,7 +1499,7 @@ function Dashboard({ stats, settings, students, payments, byClass, onGo, onOpen,
 
 /* ========================  STUDENTS LIST  ======================== */
 
-function StudentsList({ students, byClass, settings, byStudent, selClass, setSelClass, onOpen, onAdd, onDownloadAll, onDownloadClass, onDownloadAllCW, onPromote }) {
+function StudentsList({ students, byClass, settings, byStudent, selClass, setSelClass, onOpen, onAdd, onDownloadAll, onDownloadClass, onDownloadAllCW, onPromote, isAdmin }) {
   const [q, setQ] = useState('');
   const list = useMemo(() => {
     let l = selClass === 'All' ? CLASSES.flatMap(c => byClass[c]) : (byClass[selClass] || []);
@@ -1445,7 +1515,7 @@ function StudentsList({ students, byClass, settings, byStudent, selClass, setSel
       <div className="ph">
         <div><h1 className="pt">Students</h1><div className="ps">{students.length} students · Browse by class</div></div>
         <div className="acts">
-          {students.length > 0 && <button className="btn bg" onClick={onPromote} title="Move students from one class to another"><ArrowRightCircle size={14} /> Promote</button>}
+          {isAdmin && students.length > 0 && <button className="btn bg" onClick={onPromote} title="Move students from one class to another"><ArrowRightCircle size={14} /> Promote</button>}
           {students.length > 0 && (
             selClass === 'All'
               ? <>
@@ -1476,13 +1546,13 @@ function StudentsList({ students, byClass, settings, byStudent, selClass, setSel
         ) : <div className="em"><div className="es" style={{ marginBottom: 0 }}>{q ? `No students match "${q}"` : `No students enrolled in Class ${selClass}`}</div></div>
       ) : (
         <div className="list">
-          <div className="fs-legend" style={{ padding: '12px 18px 0' }}>
+          {isAdmin && <div className="fs-legend" style={{ padding: '12px 18px 0' }}>
             <span style={{ fontWeight: 500, color: '#1F3024' }}>{MONTHS[new Date().getMonth()]} tuition:</span>
             <span className="it"><span className="dot paid" /> Paid</span>
             <span className="it"><span className="dot partial" /> Partial</span>
             <span className="it"><span className="dot unpaid" /> Unpaid</span>
-          </div>
-          <div className="lr h"><div className="lh">Roll</div><div className="lh">Student</div><div className="lh">Parent Contact</div><div className="lh">Paid (Year)</div><div></div></div>
+          </div>}
+          <div className={`lr h ${isAdmin ? '' : 'nofee'}`}><div className="lh">Roll</div><div className="lh">Student</div><div className="lh">Parent Contact</div>{isAdmin && <div className="lh">Paid (Year)</div>}<div></div></div>
           {list.map(s => {
             const sp = byStudent[s.id] || [];
             const yr = new Date().getFullYear();
@@ -1490,17 +1560,17 @@ function StudentsList({ students, byClass, settings, byStudent, selClass, setSel
             const fstat = monthFeeStatus(s, sp);
             const fstatLabel = fstat === 'paid' ? 'paid' : fstat === 'partial' ? 'partially paid' : 'unpaid';
             return (
-              <div key={s.id} className="lr" onClick={() => onOpen(s.id)}>
+              <div key={s.id} className={`lr ${isAdmin ? '' : 'nofee'}`} onClick={() => onOpen(s.id)}>
                 <div className="rn">{s.rollNumber || '—'}</div>
                 <div className="cn">
-                  <div className="av-wrap" title={`${MONTHS[new Date().getMonth()]} tuition: ${fstatLabel}`}>
+                  <div className="av-wrap" title={isAdmin ? `${MONTHS[new Date().getMonth()]} tuition: ${fstatLabel}` : s.fullName}>
                     <Avatar student={s} />
-                    <span className={`fs-badge ${fstat}`} />
+                    {isAdmin && <span className={`fs-badge ${fstat}`} />}
                   </div>
                   <div className="cnt"><div className="n">{s.fullName}</div><div className="m">Class {s.studentClass}{s.section ? ` · ${s.section}` : ''} {s.gender ? `· ${s.gender}` : ''}</div></div>
                 </div>
                 <div className="cc">{s.parentPhone || s.motherPhone || s.parentName || '—'}</div>
-                <div className={`cb ${yp > 0 ? 'p' : ''}`}>{yp > 0 ? fmt(yp, settings.currency) : '—'}</div>
+                {isAdmin && <div className={`cb ${yp > 0 ? 'p' : ''}`}>{yp > 0 ? fmt(yp, settings.currency) : '—'}</div>}
                 <ChevronRight size={16} className="chev" />
               </div>
             );
@@ -1513,7 +1583,7 @@ function StudentsList({ students, byClass, settings, byStudent, selClass, setSel
 
 /* ========================  STUDENT DETAIL  ======================== */
 
-function StudentDetail({ student, settings, payments, vYear, setVYear, onBack, onEdit, onDelete, onDelPay, onRecord }) {
+function StudentDetail({ student, settings, payments, vYear, setVYear, onBack, onEdit, onDelete, onDelPay, onRecord, isAdmin }) {
   const yp = payments.filter(p => p.year == vYear);
   const monthlyPay = yp.filter(p => (p.paymentType || PT_MONTHLY) === PT_MONTHLY);
   const mTot = useMemo(() => { const m = {}; MONTHS.forEach(x => m[x] = 0); monthlyPay.forEach(p => m[p.month] = (m[p.month] || 0) + (+p.amount || 0)); return m; }, [monthlyPay]);
@@ -1562,8 +1632,8 @@ function StudentDetail({ student, settings, payments, vYear, setVYear, onBack, o
           {student.gender && <div className="ir"><div className="l">Gender</div><div className="v">{student.gender}</div></div>}
           {student.dob && <div className="ir"><div className="l">Date of Birth</div><div className="v">{student.dob}</div></div>}
           {student.enrollmentDate && <div className="ir"><div className="l">Enrolled</div><div className="v">{student.enrollmentDate}</div></div>}
-          <div className="ir"><div className="l">Monthly Fee</div><div className="v mono">{fmt(student.monthlyFee || 0, settings.currency)}</div></div>
-          <div className="ir"><div className="l">Session Fee</div><div className="v mono">{fmt(student.sessionFee || 0, settings.currency)}</div></div>
+          {isAdmin && <div className="ir"><div className="l">Monthly Fee</div><div className="v mono">{fmt(student.monthlyFee || 0, settings.currency)}</div></div>}
+          {isAdmin && <div className="ir"><div className="l">Session Fee</div><div className="v mono">{fmt(student.sessionFee || 0, settings.currency)}</div></div>}
           {student.notes && <div className="ir"><div className="l">Notes</div><div className="v">{student.notes}</div></div>}
         </div>
         <div className="card">
@@ -1577,7 +1647,7 @@ function StudentDetail({ student, settings, payments, vYear, setVYear, onBack, o
         </div>
       </div>
 
-      <div className="card">
+      {isAdmin && <div className="card">
         <div className="ctit" style={{ justifyContent: 'space-between', display: 'flex', marginBottom: 4 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><CircleDollarSign size={16} /> Fees</span>
           <button className="btn bp sm" onClick={onRecord}><Plus size={13} /> Record Payment</button>
@@ -1641,7 +1711,7 @@ function StudentDetail({ student, settings, payments, vYear, setVYear, onBack, o
               );
             })}
           </div>}
-      </div>
+      </div>}
     </>
   );
 }
@@ -1684,7 +1754,7 @@ function PhotoUploader({ photo, onChange, onToast }) {
 
 /* ========================  ADD STUDENT  ======================== */
 
-function AddStudent({ settings, existing, onAdd, onView, onToast }) {
+function AddStudent({ settings, existing, onAdd, onView, onToast, isAdmin }) {
   const init = () => ({
     photo: '', fullName: '', studentClass: '', section: '', rollNumber: '', gender: '', dob: '',
     enrollmentDate: today(), parentName: '', parentPhone: '', motherName: '', motherPhone: '',
@@ -1767,10 +1837,10 @@ function AddStudent({ settings, existing, onAdd, onView, onToast }) {
           <div className="fd"><label>Date of Birth</label><input type="date" value={f.dob} onChange={e => s('dob', e.target.value)} /></div>
           <div className="fd"><label>Enrolled On</label><input type="date" value={f.enrollmentDate} onChange={e => s('enrollmentDate', e.target.value)} /></div>
         </div>
-        <div className="fr2">
+        {isAdmin && <div className="fr2">
           <div className="fd"><label>Monthly Fee ({settings.currency})</label><input type="number" value={f.monthlyFee} onChange={e => s('monthlyFee', e.target.value)} placeholder="0" /><div className="hi">Tuition fee charged each month.</div></div>
           <div className="fd"><label>Session Fee ({settings.currency})</label><input type="number" value={f.sessionFee} onChange={e => s('sessionFee', e.target.value)} placeholder="0" /><div className="hi">One-time fee for the academic session.</div></div>
-        </div>
+        </div>}
       </div>
 
       <div className="fs">
@@ -2110,7 +2180,7 @@ function Export({ stats, settings, payments, byClass, archivedPayments, onCWStud
 
 /* ========================  SETTINGS  ======================== */
 
-function SettingsPage({ settings, onSave, students, payments, onClear, onSignOut, onToast, onOpenPromote, userEmail, profile }) {
+function SettingsPage({ settings, onSave, students, payments, onClear, onSignOut, onToast, onOpenPromote, userEmail, profile, isAdmin }) {
   const [l, setL] = useState(settings);
   useEffect(() => setL(settings), [settings]);
   const s = (k, v) => { const n = { ...l, [k]: v }; setL(n); onSave(n); };
@@ -2132,9 +2202,9 @@ function SettingsPage({ settings, onSave, students, payments, onClear, onSignOut
 
   return (
     <>
-      <div className="ph"><div><h1 className="pt">Settings</h1><div className="ps">School details, your account, and end-of-year operations.</div></div></div>
+      <div className="ph"><div><h1 className="pt">Settings</h1><div className="ps">{isAdmin ? 'School details, your account, and end-of-year operations.' : 'Your account.'}</div></div></div>
 
-      <div className="fs" style={{ maxWidth: 600 }}>
+      {isAdmin && <div className="fs" style={{ maxWidth: 600 }}>
         <div className="fst"><GraduationCap size={16} /> School Details</div>
         <div className="fss">Shared across all admin accounts. Changes save automatically.</div>
         <div className="fd"><label>School Name</label><input value={l.schoolName} onChange={e => s('schoolName', e.target.value)} /></div>
@@ -2146,22 +2216,22 @@ function SettingsPage({ settings, onSave, students, payments, onClear, onSignOut
           <div className="fd"><label>Default Monthly Fee</label><input type="number" value={l.defaultMonthlyFee} onChange={e => s('defaultMonthlyFee', +e.target.value || 0)} /><div className="hi">Pre-fills when adding new students.</div></div>
           <div className="fd"><label>Default Session Fee</label><input type="number" value={l.defaultSessionFee || 0} onChange={e => s('defaultSessionFee', +e.target.value || 0)} /><div className="hi">Pre-fills when adding new students.</div></div>
         </div>
-      </div>
+      </div>}
 
-      <div className="fs" style={{ maxWidth: 600 }}>
+      {isAdmin && <div className="fs" style={{ maxWidth: 600 }}>
         <div className="fst"><ArrowRightCircle size={16} /> Year-End Promotion</div>
         <div className="fss">When a new academic year begins, promote students from one class to the next in a single step. For Class Nine & Ten, you'll be asked to assign Science or Humanities.</div>
         <button className="btn bp" onClick={onOpenPromote}><ArrowRightCircle size={14} /> Open Promote Tool</button>
-      </div>
+      </div>}
 
-      <TeamManager userEmail={userEmail} onToast={onToast} />
+      {isAdmin && <TeamManager userEmail={userEmail} onToast={onToast} />}
 
       <div className="fs" style={{ maxWidth: 600 }}>
         <div className="fst"><UserCircle size={16} /> Your Account</div>
         <div className="fss">Signed in as <strong style={{ color: '#1F3024' }}>{userEmail}</strong></div>
-        <div style={{ fontSize: 12.5, color: '#5C6B5F', lineHeight: 1.55, marginBottom: 16 }}>
+        {isAdmin && <div style={{ fontSize: 12.5, color: '#5C6B5F', lineHeight: 1.55, marginBottom: 16 }}>
           New staff create their own account from the sign-in page, but they can't see or change anything until you approve them in the Team Access section above. Each payment records which admin entered it and the exact time.
-        </div>
+        </div>}
         <div className="fst" style={{ fontSize: 14, marginTop: 18 }}><Lock size={14} /> Change Password</div>
         <div className="fss">Update your password. You'll keep using the current one until you confirm a new one.</div>
         <div className="fr2">
@@ -2174,7 +2244,7 @@ function SettingsPage({ settings, onSave, students, payments, onClear, onSignOut
         </div>
       </div>
 
-      <div className="fs" style={{ maxWidth: 600 }}>
+      {isAdmin && <div className="fs" style={{ maxWidth: 600 }}>
         <div className="fst"><Info size={16} /> Your Data</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div style={{ background: '#FAFBF7', padding: 14, borderRadius: 7, border: '1px solid #E6ECE1' }}>
@@ -2187,13 +2257,13 @@ function SettingsPage({ settings, onSave, students, payments, onClear, onSignOut
           </div>
         </div>
         <div style={{ fontSize: 12.5, color: '#5C6B5F', marginTop: 14, lineHeight: 1.6 }}>Your data is saved in the cloud and accessible from any device. Still, export an Excel backup regularly.</div>
-      </div>
+      </div>}
 
-      <div className="dz" style={{ maxWidth: 600 }}>
+      {isAdmin && <div className="dz" style={{ maxWidth: 600 }}>
         <h3>Danger Zone</h3>
         <p>Erase all students and payments from the cloud database. This affects every admin. Export an Excel backup first.</p>
         <button className="btn bd" onClick={onClear}><Trash2 size={14} /> Erase All Data</button>
-      </div>
+      </div>}
     </>
   );
 }
@@ -2345,7 +2415,7 @@ function PromoteModal({ byClass, onClose, onPromote, currency }) {
 
 /* ========================  EDIT STUDENT MODAL  ======================== */
 
-function StudentForm({ student, settings, existing, onClose, onSave, onToast }) {
+function StudentForm({ student, settings, existing, onClose, onSave, onToast, isAdmin }) {
   const [f, setF] = useState({
     photo: student.photoUrl || '',
     fullName: student.fullName || '', studentClass: student.studentClass || '', section: student.section || '', rollNumber: student.rollNumber || '',
@@ -2412,10 +2482,10 @@ function StudentForm({ student, settings, existing, onClose, onSave, onToast }) 
             <div className="fd"><label>Date of Birth</label><input type="date" value={f.dob} onChange={e => s('dob', e.target.value)} /></div>
             <div className="fd"><label>Enrolled</label><input type="date" value={f.enrollmentDate} onChange={e => s('enrollmentDate', e.target.value)} /></div>
           </div>
-          <div className="fr2">
+          {isAdmin && <div className="fr2">
             <div className="fd"><label>Monthly Fee ({settings.currency})</label><input type="number" value={f.monthlyFee} onChange={e => s('monthlyFee', e.target.value)} /></div>
             <div className="fd"><label>Session Fee ({settings.currency})</label><input type="number" value={f.sessionFee} onChange={e => s('sessionFee', e.target.value)} /></div>
-          </div>
+          </div>}
           <div style={{ height: 1, background: '#E6ECE1', margin: '18px 0' }}></div>
           <div className="fr2">
             <div className="fd"><label>Father / Guardian</label><input value={f.parentName} onChange={e => s('parentName', e.target.value)} /></div>

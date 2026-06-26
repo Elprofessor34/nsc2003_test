@@ -694,6 +694,9 @@ function AppInner() {
     if (session) await resolveAccess(session);
   };
 
+  // Role flag — declared here (before the effects/early-returns that use it) to avoid a TDZ crash.
+  const isAdmin = !!profile?.isAdmin;
+
   const refetchAll = async () => {
     try {
       const [sts, cfg] = await Promise.all([api.listStudents(), api.getSettings()]);
@@ -1056,7 +1059,6 @@ function AppInner() {
   if (loading) return <SkeletonScreen />;
 
   // Role: admins see everything; operators (approved, non-admin) manage students only.
-  const isAdmin = !!profile?.isAdmin;
   const allTabs = [
     { id: 'dashboard', l: 'Dashboard', ic: LayoutDashboard },
     { id: 'students', l: 'Students', ic: Users },

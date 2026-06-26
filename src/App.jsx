@@ -5,7 +5,7 @@ import {
   AlertCircle, TrendingUp, Wallet, BookOpen, ArrowLeft, Check, CircleDollarSign,
   FileDown, Hash, CheckCircle2, Clock, Info, Camera, Upload, ArrowUpRight,
   Award, User, Lock, LogOut, ShieldCheck, Eye, EyeOff, KeyRound, ArrowRightCircle,
-  Mail, History, Microscope, BookText, UserCircle, UserCheck, UserX, ShieldAlert, Hourglass
+  Mail, History, Microscope, BookText, UserCircle, UserCheck, UserX, ShieldAlert, Hourglass, Droplet
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { supabase } from './supabase';
@@ -484,9 +484,10 @@ const compressImage = (file) => new Promise((resolve, reject) => {
   reader.readAsDataURL(file);
 });
 
-const SH = ['Roll No', 'Full Name', 'Class', 'Section', 'Gender', 'Date of Birth', 'Enrollment Date', "Father's Name", "Father's Phone", "Mother's Name", "Mother's Phone", 'Address', 'Monthly Fee', 'Session Fee', 'Notes'];
+const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+const SH = ['Roll No', 'Full Name', 'Class', 'Section', 'Gender', 'Blood Group', 'Date of Birth', 'Enrollment Date', "Father's Name", "Father's Phone", "Mother's Name", "Mother's Phone", 'Address', 'Monthly Fee', 'Session Fee', 'Notes'];
 const PH_HDR = ['Payment Date', 'Class', 'Section', 'Roll No', 'Student Name', 'Payment Type', 'Month/Period', 'Year', 'Amount', 'Method', 'Description', 'Recorded By', 'Recorded At'];
-const srow = (s) => [s.rollNumber || '', s.fullName || '', s.studentClass || '', s.section || '', s.gender || '', s.dob || '', s.enrollmentDate || '', s.parentName || '', s.parentPhone || '', s.motherName || '', s.motherPhone || '', s.address || '', s.monthlyFee || 0, s.sessionFee || 0, s.notes || ''];
+const srow = (s) => [s.rollNumber || '', s.fullName || '', s.studentClass || '', s.section || '', s.gender || '', s.bloodGroup || '', s.dob || '', s.enrollmentDate || '', s.parentName || '', s.parentPhone || '', s.motherName || '', s.motherPhone || '', s.address || '', s.monthlyFee || 0, s.sessionFee || 0, s.notes || ''];
 const prow = (p, s) => [p.paidDate || '', s?.studentClass || '', s?.section || '', s?.rollNumber || '', s?.fullName || '', p.paymentType || PT_MONTHLY, p.month || '', p.year || '', p.amount || 0, p.method || '', p.description || '', p.recordedBy || '', p.recordedAt ? fmtDT(p.recordedAt) : ''];
 // Build one fee-register row for a student: amounts paid per category for the given year (blank if 0).
 const feeRow = (student, sp, year) => {
@@ -694,7 +695,7 @@ function AppInner() {
     if (session) await resolveAccess(session);
   };
 
-  // Role flag — declared here (before the effects/early-returns that use it) to avoid a TDZ crash.
+  // Role flag — declared before the effects/early-returns that use it.
   const isAdmin = !!profile?.isAdmin;
 
   const refetchAll = async () => {
@@ -1616,6 +1617,7 @@ function StudentDetail({ student, settings, payments, vYear, setVYear, onBack, o
             {student.section && <span className={`tg ${student.section === 'Science' ? 'sci' : 'hum'}`}>{student.section === 'Science' ? <Microscope size={11} /> : <BookText size={11} />} {student.section}</span>}
             <span className="tg"><Hash size={11} /> Roll {student.rollNumber || '—'}</span>
             {student.gender && <span className="tg">{student.gender}</span>}
+            {student.bloodGroup && <span className="tg" style={{ color: '#8B2E2E', borderColor: '#E9D3D3', background: '#FBF1F1' }}><Droplet size={11} /> {student.bloodGroup}</span>}
             {student.dob && <span className="tg"><Calendar size={11} /> {student.dob}</span>}
           </div>
         </div>
@@ -1632,6 +1634,7 @@ function StudentDetail({ student, settings, payments, vYear, setVYear, onBack, o
           {student.section && <div className="ir"><div className="l">Section</div><div className="v">{student.section}</div></div>}
           <div className="ir"><div className="l">Roll Number</div><div className="v">{student.rollNumber || '—'}</div></div>
           {student.gender && <div className="ir"><div className="l">Gender</div><div className="v">{student.gender}</div></div>}
+          {student.bloodGroup && <div className="ir"><div className="l">Blood Group</div><div className="v" style={{ color: '#8B2E2E', fontWeight: 600 }}>{student.bloodGroup}</div></div>}
           {student.dob && <div className="ir"><div className="l">Date of Birth</div><div className="v">{student.dob}</div></div>}
           {student.enrollmentDate && <div className="ir"><div className="l">Enrolled</div><div className="v">{student.enrollmentDate}</div></div>}
           {isAdmin && <div className="ir"><div className="l">Monthly Fee</div><div className="v mono">{fmt(student.monthlyFee || 0, settings.currency)}</div></div>}
@@ -1758,7 +1761,7 @@ function PhotoUploader({ photo, onChange, onToast }) {
 
 function AddStudent({ settings, existing, onAdd, onView, onToast, isAdmin }) {
   const init = () => ({
-    photo: '', fullName: '', studentClass: '', section: '', rollNumber: '', gender: '', dob: '',
+    photo: '', fullName: '', studentClass: '', section: '', rollNumber: '', gender: '', bloodGroup: '', dob: '',
     enrollmentDate: today(), parentName: '', parentPhone: '', motherName: '', motherPhone: '',
     address: '', monthlyFee: settings.defaultMonthlyFee || 0, sessionFee: settings.defaultSessionFee || 0, notes: ''
   });
@@ -1830,12 +1833,20 @@ function AddStudent({ settings, existing, onAdd, onView, onToast, isAdmin }) {
             {warn && <div className="wn"><AlertCircle size={13} /> {warn}</div>}
           </div>
         </div>
-        <div className="fr3">
+        <div className="fr2">
           <div className="fd"><label>Gender</label>
             <select value={f.gender} onChange={e => s('gender', e.target.value)}>
               <option value="">—</option><option>Female</option><option>Male</option><option>Other</option>
             </select>
           </div>
+          <div className="fd"><label>Blood Group</label>
+            <select value={f.bloodGroup} onChange={e => s('bloodGroup', e.target.value)}>
+              <option value="">—</option>
+              {BLOOD_GROUPS.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="fr2">
           <div className="fd"><label>Date of Birth</label><input type="date" value={f.dob} onChange={e => s('dob', e.target.value)} /></div>
           <div className="fd"><label>Enrolled On</label><input type="date" value={f.enrollmentDate} onChange={e => s('enrollmentDate', e.target.value)} /></div>
         </div>
@@ -2421,7 +2432,7 @@ function StudentForm({ student, settings, existing, onClose, onSave, onToast, is
   const [f, setF] = useState({
     photo: student.photoUrl || '',
     fullName: student.fullName || '', studentClass: student.studentClass || '', section: student.section || '', rollNumber: student.rollNumber || '',
-    gender: student.gender || '', dob: student.dob || '', enrollmentDate: student.enrollmentDate || today(),
+    gender: student.gender || '', bloodGroup: student.bloodGroup || '', dob: student.dob || '', enrollmentDate: student.enrollmentDate || today(),
     parentName: student.parentName || '', parentPhone: student.parentPhone || '',
     motherName: student.motherName || '', motherPhone: student.motherPhone || '',
     address: student.address || '', monthlyFee: student.monthlyFee ?? 0, sessionFee: student.sessionFee ?? 0, notes: student.notes || ''
@@ -2475,12 +2486,20 @@ function StudentForm({ student, settings, existing, onClose, onSave, onToast, is
               {warn && <div className="wn"><AlertCircle size={13} /> {warn}</div>}
             </div>
           </div>
-          <div className="fr3">
+          <div className="fr2">
             <div className="fd"><label>Gender</label>
               <select value={f.gender} onChange={e => s('gender', e.target.value)}>
                 <option value="">—</option><option>Female</option><option>Male</option><option>Other</option>
               </select>
             </div>
+            <div className="fd"><label>Blood Group</label>
+              <select value={f.bloodGroup} onChange={e => s('bloodGroup', e.target.value)}>
+                <option value="">—</option>
+                {BLOOD_GROUPS.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="fr2">
             <div className="fd"><label>Date of Birth</label><input type="date" value={f.dob} onChange={e => s('dob', e.target.value)} /></div>
             <div className="fd"><label>Enrolled</label><input type="date" value={f.enrollmentDate} onChange={e => s('enrollmentDate', e.target.value)} /></div>
           </div>

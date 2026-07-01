@@ -23,6 +23,25 @@ const PT_T2 = 'Second Term Exam';
 const PT_TF = 'Final Term Exam';
 const PT_OTHER = 'Other';
 const PAYMENT_TYPES = [PT_MONTHLY, PT_SESSION, PT_T1, PT_T2, PT_TF, PT_OTHER];
+// Payment types that may only be charged ONCE per student per year.
+const ONCE_PER_YEAR_TYPES = [PT_SESSION, PT_T1, PT_T2, PT_TF];
+// Given one student's payments and a proposed new payment, return a human-readable
+// reason if it would be a duplicate, else ''. Monthly = once per month+year;
+// Session & Exam fees = once per year; Other = unlimited.
+const paymentDupReason = (studentPays, data) => {
+  const type = data.paymentType || PT_MONTHLY;
+  const yr = +data.year;
+  const list = studentPays || [];
+  if (type === PT_MONTHLY) {
+    return list.some(p => (p.paymentType || PT_MONTHLY) === PT_MONTHLY && p.month === data.month && +p.year === yr)
+      ? `${data.month} ${yr} tuition is already recorded for this student.` : '';
+  }
+  if (ONCE_PER_YEAR_TYPES.includes(type)) {
+    return list.some(p => p.paymentType === type && +p.year === yr)
+      ? `${type} for ${yr} is already recorded for this student.` : '';
+  }
+  return '';
+};
 const TERM_TYPES = [PT_T1, PT_T2, PT_TF];
 // Fee Register (matrix) export columns — matches the school's payment summary template
 const FEE_REGISTER_COLS = ['Roll No', 'Name', 'Session Fee', '1st Term', '2nd Term', 'Final Term', ...MONTHS];
@@ -656,6 +675,9 @@ function AppInner() {
   const [confDel, setConfDel] = useState(null);
   const [confClear, setConfClear] = useState(false);
   const [showPromote, setShowPromote] = useState(false);
+  const [showRecordPay, setShowRecordPay] = useState(false);
+  // Close the quick-payment modal whenever the open student changes (or we leave the profile).
+  useEffect(() => { setShowRecordPay(false); }, [selId]);
 
   // Given a signed-in session, decide whether the user is approved.
   // Approved → 'authed'. Not approved → 'pending'.
@@ -841,11 +863,10 @@ function AppInner() {
     } catch (e) { console.error(e); tst('Could not delete student', 'err'); }
   };
   const addPay = async (data) => {
-    // Guard: one Monthly Tuition payment per student per month per year.
-    if ((data.paymentType || PT_MONTHLY) === PT_MONTHLY) {
-      const dup = payments.some(p => p.studentId === data.studentId && (p.paymentType || PT_MONTHLY) === PT_MONTHLY && p.month === data.month && p.year === data.year);
-      if (dup) { tst(`${data.month} ${data.year} tuition is already recorded for this student`, 'err'); return; }
-    }
+    // Guard: monthly once per month+year; session & exam fees once per year.
+    const mine = payments.filter(p => p.studentId === data.studentId);
+    const reason = paymentDupReason(mine, data);
+    if (reason) { tst(reason, 'err'); return; }
     const id = uid();
     const newPay = { id, ...data, recordedBy: userEmail };
     try {
@@ -855,9 +876,9 @@ function AppInner() {
       tst(`Payment recorded for ${s?.fullName || 'student'}`);
     } catch (e) {
       console.error(e);
-      // 23505 = unique_violation (the DB constraint caught a duplicate, e.g. two admins at once)
+      // 23505 = unique_violation (a DB constraint caught a duplicate, e.g. two admins at once)
       if (e?.code === '23505' || /duplicate|unique/i.test(e?.message || '')) {
-        tst(`${data.month} ${data.year} tuition is already recorded for this student`, 'err');
+        tst('This payment is already recorded for this student', 'err');
       } else {
         tst('Could not record payment', 'err');
       }
@@ -1099,7 +1120,7 @@ function AppInner() {
        <div className="fade-in" key={sel ? 'detail' : safePage}>
         {safePage === 'dashboard' && <Dashboard stats={stats} settings={settings} students={students} payments={payments} byClass={byClass} onGo={go} onOpen={(id) => { setSelId(id); setPage('students'); }} userEmail={userEmail} isAdmin={isAdmin} />}
         {safePage === 'students' && !sel && <StudentsList students={students} byClass={byClass} settings={settings} byStudent={byStudent} selClass={selClass} setSelClass={setSelClass} onOpen={setSelId} onAdd={() => setPage('add')} onDownloadAll={expAllStudents} onDownloadClass={expOneClassStudents} onDownloadAllCW={expCWStudents} onPromote={() => setShowPromote(true)} isAdmin={isAdmin} />}
-        {safePage === 'students' && sel && <StudentDetail student={sel} settings={settings} payments={byStudent[sel.id] || []} vYear={vYear} setVYear={setVYear} onBack={() => setSelId(null)} onEdit={() => { setEditing(sel); setShowEdit(true); }} onDelete={() => setConfDel(sel.id)} onDelPay={delPay} onRecord={() => setPage('payments')} isAdmin={isAdmin} />}
+        {safePage === 'students' && sel && <StudentDetail student={sel} settings={settings} payments={byStudent[sel.id] || []} vYear={vYear} setVYear={setVYear} onBack={() => setSelId(null)} onEdit={() => { setEditing(sel); setShowEdit(true); }} onDelete={() => setConfDel(sel.id)} onDelPay={delPay} onRecord={() => setShowRecordPay(true)} isAdmin={isAdmin} />}
         {safePage === 'add' && <AddStudent settings={settings} existing={students} onAdd={addStudent} onView={() => setPage('students')} onToast={tst} isAdmin={isAdmin} />}
         {safePage === 'payments' && isAdmin && <Payments students={students} payments={payments} settings={settings} byClass={byClass} fClass={pfClass} setFClass={setPfClass} fMonth={pfMonth} setFMonth={setPfMonth} fType={pfType} setFType={setPfType} onAdd={addPay} onDel={delPay} onOpen={(id) => { setSelId(id); setPage('students'); }} onDownloadAll={expAllPayments} onDownloadClass={expOneClassPayments} onDownloadAllCW={expCWPayments} />}
         {safePage === 'export' && isAdmin && <Export stats={stats} settings={settings} payments={payments} byClass={byClass} archivedPayments={archivedPayments} onCWStudents={expCWStudents} onAllStudents={expAllStudents} onCWPayments={expCWPayments} onAllPayments={expAllPayments} onFeeRegister={expFeeRegister} onFeeRegisterClass={expFeeRegisterClass} onArchivedRegister={expArchivedRegister} />}
@@ -1117,6 +1138,7 @@ function AppInner() {
 
       {showEdit && editing && <StudentForm student={editing} settings={settings} existing={students} onClose={() => { setShowEdit(false); setEditing(null); }} onSave={updStudent} onToast={tst} isAdmin={isAdmin} />}
       {showPromote && <PromoteModal byClass={byClass} onClose={() => setShowPromote(false)} onPromote={promote} currency={settings.currency} />}
+      {showRecordPay && sel && isAdmin && <RecordPaymentModal student={sel} settings={settings} studentPayments={byStudent[sel.id] || []} onClose={() => setShowRecordPay(false)} onAdd={addPay} onToast={tst} />}
 
       {confDel && (
         <div className="mov" onClick={() => setConfDel(null)}>
@@ -1905,11 +1927,12 @@ function Payments({ students, payments, settings, byClass, fClass, setFClass, fM
     s('amount', autoAmount());
   }, [f.studentId, f.paymentType, f.month]);
   // Detect an existing Monthly Tuition payment for this student/month/year
-  const dupMonthly = useMemo(() => {
-    if (f.paymentType !== PT_MONTHLY || !f.studentId || !f.month) return false;
-    return payments.some(p => p.studentId === f.studentId && (p.paymentType || PT_MONTHLY) === PT_MONTHLY && p.month === f.month && p.year === +f.year);
+  const dupReason = useMemo(() => {
+    if (!f.studentId) return '';
+    const mine = payments.filter(p => p.studentId === f.studentId);
+    return paymentDupReason(mine, { paymentType: f.paymentType, month: f.month, year: f.year });
   }, [f.studentId, f.paymentType, f.month, f.year, payments]);
-  const can = f.studentId && f.year && +f.amount > 0 && (f.paymentType !== PT_MONTHLY || f.month) && !dupMonthly;
+  const can = f.studentId && f.year && +f.amount > 0 && (f.paymentType !== PT_MONTHLY || f.month) && !dupReason;
   const sub = async () => {
     if (!can || busy) return;
     setBusy(true);
@@ -2002,9 +2025,9 @@ function Payments({ students, payments, settings, byClass, fClass, setFClass, fM
         <div className="fd"><label>Description (optional)</label>
           <input value={f.description} onChange={e => s('description', e.target.value)} placeholder="e.g. tuition for term 1, late fine, etc." />
         </div>
-        {dupMonthly && (
+        {dupReason && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#F0D9D9', color: '#8B2E2E', border: '1px solid rgba(139,46,46,.2)', borderRadius: 7, padding: '11px 14px', fontSize: 13, marginTop: 4 }}>
-            <AlertCircle size={16} style={{ flexShrink: 0 }} /> {f.month} {f.year} tuition is already recorded for this student. A month can only be paid once.
+            <AlertCircle size={16} style={{ flexShrink: 0 }} /> {dupReason}
           </div>
         )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
@@ -2427,6 +2450,125 @@ function PromoteModal({ byClass, onClose, onPromote, currency }) {
 }
 
 /* ========================  EDIT STUDENT MODAL  ======================== */
+
+/* ========================  RECORD PAYMENT (from a student profile)  ======================== */
+
+function RecordPaymentModal({ student, settings, studentPayments, onClose, onAdd, onToast }) {
+  const [f, setF] = useState({
+    paymentType: PT_MONTHLY,
+    month: MONTHS[new Date().getMonth()],
+    year: new Date().getFullYear(),
+    amount: student.monthlyFee || '',
+    method: 'Cash', description: '', paidDate: today()
+  });
+  const [busy, setBusy] = useState(false);
+  const [flash, setFlash] = useState('');
+  const s = (k, v) => setF(x => ({ ...x, [k]: v }));
+
+  // Auto-fill amount from the student's saved fee whenever type/month changes.
+  const autoAmount = () => {
+    if (f.paymentType === PT_MONTHLY) return student.monthlyFee || '';
+    if (f.paymentType === PT_SESSION) return student.sessionFee || '';
+    return '';
+  };
+  useEffect(() => { s('amount', autoAmount()); }, [f.paymentType, f.month]);
+
+  const dupReason = useMemo(() => paymentDupReason(studentPayments, { paymentType: f.paymentType, month: f.month, year: f.year }), [f.paymentType, f.month, f.year, studentPayments]);
+
+  const can = f.year && +f.amount > 0 && (f.paymentType !== PT_MONTHLY || f.month) && !dupReason && !busy;
+
+  const save = async (addAnother) => {
+    if (!can) return;
+    setBusy(true);
+    const monthValue = f.paymentType === PT_MONTHLY ? f.month : (f.paymentType === PT_SESSION ? 'Session' : f.paymentType === PT_T1 ? 'First Term' : f.paymentType === PT_T2 ? 'Second Term' : f.paymentType === PT_TF ? 'Final Term' : '');
+    await onAdd({ studentId: student.id, paymentType: f.paymentType, month: monthValue, year: +f.year, amount: +f.amount, method: f.method, description: f.description, paidDate: f.paidDate });
+    setBusy(false);
+    if (!addAnother) { onClose(); return; }
+    // Save & add another: for monthly, jump to the next month so the following one is one click away.
+    setFlash(`${f.paymentType === PT_MONTHLY ? f.month + ' ' : ''}payment saved.`);
+    setTimeout(() => setFlash(''), 2600);
+    setF(x => {
+      let nm = x.month;
+      if (x.paymentType === PT_MONTHLY) { const i = MONTHS.indexOf(x.month); nm = (i >= 0 && i < 11) ? MONTHS[i + 1] : x.month; }
+      return { ...x, month: nm, description: '' };
+    });
+  };
+
+  const periodLabel = f.paymentType === PT_SESSION ? 'Session' : f.paymentType === PT_T1 ? 'First Term' : f.paymentType === PT_T2 ? 'Second Term' : f.paymentType === PT_TF ? 'Final Term' : 'Other';
+
+  return (
+    <div className="mov" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="mh">
+          <div className="mt">Record Payment</div>
+          <button className="mc" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="mb">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11, background: '#FAFBF7', border: '1px solid #E6ECE1', borderRadius: 9, padding: '11px 13px', marginBottom: 18 }}>
+            <Avatar student={student} />
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#0B1A12' }}>{student.fullName}</div>
+              <div style={{ fontSize: 12, color: '#5C6B5F' }}>Class {student.studentClass}{student.section ? ` · ${student.section}` : ''}{student.rollNumber ? ` · Roll ${student.rollNumber}` : ''}</div>
+            </div>
+          </div>
+
+          <div className="fd"><label>Payment For <span className="rq">*</span></label>
+            <select value={f.paymentType} onChange={e => s('paymentType', e.target.value)}>
+              {PAYMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+
+          <div className="fr3">
+            {f.paymentType === PT_MONTHLY ? (
+              <div className="fd"><label>For Month <span className="rq">*</span></label>
+                <select value={f.month} onChange={e => s('month', e.target.value)}>{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
+              </div>
+            ) : (
+              <div className="fd"><label>Period</label><input value={periodLabel} disabled /></div>
+            )}
+            <div className="fd"><label>Year <span className="rq">*</span></label><input type="number" value={f.year} onChange={e => s('year', e.target.value)} /></div>
+            <div className="fd"><label>Paid On</label><input type="date" value={f.paidDate} onChange={e => s('paidDate', e.target.value)} /></div>
+          </div>
+
+          <div className="fr2">
+            <div className="fd"><label>Amount ({settings.currency}) <span className="rq">*</span></label>
+              <input type="number" value={f.amount} onChange={e => s('amount', e.target.value)} placeholder="0" />
+              {f.paymentType === PT_MONTHLY && (student.monthlyFee > 0
+                ? <div className="hi">Auto-filled from the monthly fee ({fmt(student.monthlyFee, settings.currency)}). Change only for a partial payment.</div>
+                : <div className="wn"><AlertCircle size={13} /> No monthly fee set. Type the amount, or edit the student to set one.</div>)}
+              {f.paymentType === PT_SESSION && student.sessionFee > 0 && <div className="hi">Auto-filled from the session fee ({fmt(student.sessionFee, settings.currency)}).</div>}
+            </div>
+            <div className="fd"><label>Method</label>
+              <select value={f.method} onChange={e => s('method', e.target.value)}>
+                <option>Cash</option><option>Bank transfer</option><option>Card</option><option>Cheque</option><option>Mobile money</option><option>Other</option>
+              </select>
+            </div>
+          </div>
+          <div className="fd"><label>Description (optional)</label>
+            <input value={f.description} onChange={e => s('description', e.target.value)} placeholder="e.g. late fine, partial payment, etc." />
+          </div>
+
+          {dupReason && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#F0D9D9', color: '#8B2E2E', border: '1px solid rgba(139,46,46,.2)', borderRadius: 7, padding: '11px 14px', fontSize: 13, marginTop: 4 }}>
+              <AlertCircle size={16} style={{ flexShrink: 0 }} /> {dupReason}
+            </div>
+          )}
+          {flash && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#DCEAD9', color: '#1B4332', border: '1px solid rgba(27,67,50,.2)', borderRadius: 7, padding: '11px 14px', fontSize: 13, marginTop: 4 }}>
+              <CheckCircle2 size={16} style={{ flexShrink: 0 }} /> {flash}
+            </div>
+          )}
+        </div>
+        <div className="mf">
+          <button className="btn bg" onClick={onClose}>Close</button>
+          <button className="btn bg" onClick={() => save(true)} disabled={!can}><Plus size={14} /> Save &amp; add another</button>
+          <button className="btn bp" onClick={() => save(false)} disabled={!can}><Check size={15} /> {busy ? 'Saving…' : 'Save Payment'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function StudentForm({ student, settings, existing, onClose, onSave, onToast, isAdmin }) {
   const [f, setF] = useState({

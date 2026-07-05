@@ -468,12 +468,16 @@ const sanitizeSheetName = (n) => (n || 'Sheet').replace(/[:\\/?*\[\]]/g, ' ').sl
 const exportXLSX = (sheets, filename) => {
   const wb = XLSX.utils.book_new();
   const used = {};
-  sheets.forEach(({ name, headers, rows }) => {
+  sheets.forEach(({ name, headers, rows, aoa, merges, cols }) => {
     let nm = sanitizeSheetName(name);
     // Ensure unique tab names
     if (used[nm]) { let i = 2; while (used[`${nm.slice(0, 28)} ${i}`]) i++; nm = `${nm.slice(0, 28)} ${i}`; }
     used[nm] = true;
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    // `aoa` = full control of every row (title lines, total rows, etc.).
+    // Otherwise the classic [headers, ...rows] shape.
+    const ws = XLSX.utils.aoa_to_sheet(aoa ? aoa : [headers, ...rows]);
+    if (merges) ws['!merges'] = merges;
+    if (cols) ws['!cols'] = cols;
     XLSX.utils.book_append_sheet(wb, ws, nm);
   });
   XLSX.writeFile(wb, filename);
@@ -1045,34 +1049,58 @@ function AppInner() {
   const expDuesReport = (className, fromIdx, toIdx, year) => {
     const from = Math.min(fromIdx, toIdx), to = Math.max(fromIdx, toIdx);
     const rangeMonths = MONTHS.slice(from, to + 1);
-    const header = ['Roll', 'Name', 'Section', 'Contact', ...rangeMonths, 'Months Due', `Total Due (${settings.currency})`];
+    const rangeLabel = `${rangeMonths[0]} to ${rangeMonths[rangeMonths.length - 1]} ${year}`;
+    const cur = settings.currency;
+    // One row per student who still owes: which months, their own monthly fee, and total due.
     const buildRows = (studs) => {
       const rows = [];
       (studs || []).forEach(s => {
         const fee = +s.monthlyFee || 0;
+        if (fee <= 0) return; // no monthly fee set -> nothing owed
         const sp = byStudent[s.id] || [];
-        const cells = []; const unpaid = []; let totalDue = 0;
+        const unpaid = []; let totalDue = 0;
         rangeMonths.forEach(m => {
           const paid = sp.filter(p => (p.paymentType || PT_MONTHLY) === PT_MONTHLY && p.month === m && +p.year === +year).reduce((a, p) => a + (+p.amount || 0), 0);
           const due = Math.max(fee - paid, 0);
-          if (fee <= 0) cells.push('—');            // no monthly fee set -> nothing owed
-          else if (due <= 0) cells.push('Paid');
-          else { cells.push('Due'); unpaid.push(m); totalDue += due; }
+          if (due > 0) { unpaid.push(m); totalDue += due; }
         });
-        // Only students who owe something in this range appear.
-        if (totalDue > 0) rows.push([s.rollNumber || '', s.fullName || '', s.section || '', s.parentPhone || s.motherPhone || '', ...cells, unpaid.length, totalDue]);
+        if (totalDue > 0) rows.push([s.rollNumber || '', s.fullName || '', unpaid.join(', '), fee, totalDue]);
       });
       return rows.sort((a, b) => (parseInt(a[0]) || 9999) - (parseInt(b[0]) || 9999));
     };
+    // Full sheet: title block, header, data, TOTAL DUE row.
+    const buildSheet = (cls, rows) => {
+      const grand = rows.reduce((a, r) => a + (+r[4] || 0), 0);
+      return {
+        name: `Class ${cls}`,
+        aoa: [
+          [settings.schoolName || SCHOOL_DEFAULT],
+          [`Tuition Dues — Class ${cls} — ${rangeLabel}`],
+          [],
+          ['Roll', 'Name', 'Months Due', `Monthly Fee (${cur})`, `Total (${cur})`],
+          ...rows,
+          ['', '', '', 'TOTAL DUE', grand],
+        ],
+        merges: [
+          { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
+          { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
+        ],
+        cols: [{ wch: 8 }, { wch: 26 }, { wch: 46 }, { wch: 16 }, { wch: 12 }],
+      };
+    };
     let sheets;
     if (className === 'All') {
-      sheets = CLASSES.filter(c => (byClass[c] || []).length).map(c => ({ name: `Class ${c}`, headers: header, rows: buildRows(byClass[c]) })).filter(sh => sh.rows.length);
+      sheets = CLASSES.filter(c => (byClass[c] || []).length)
+        .map(c => ({ cls: c, rows: buildRows(byClass[c]) }))
+        .filter(x => x.rows.length)
+        .map(x => buildSheet(x.cls, x.rows));
     } else {
       if (!byClass[className]?.length) { tst(`No students in Class ${className}`); return; }
-      sheets = [{ name: `Class ${className}`, headers: header, rows: buildRows(byClass[className]) }];
+      const rows = buildRows(byClass[className]);
+      sheets = rows.length ? [buildSheet(className, rows)] : [];
     }
-    const dueCount = sheets.reduce((a, sh) => a + sh.rows.length, 0);
-    if (dueCount === 0) { tst(`No dues for ${rangeMonths[0]}–${rangeMonths[rangeMonths.length - 1]} ${year} — everyone has paid`); return; }
+    const dueCount = sheets.reduce((a, sh) => a + (sh.aoa.length - 5), 0); // minus 4 header rows + 1 total row
+    if (dueCount <= 0) { tst(`No dues for ${rangeMonths[0]}–${rangeMonths[rangeMonths.length - 1]} ${year} — everyone has paid`); return; }
     const range = `${rangeMonths[0].slice(0, 3)}-${rangeMonths[rangeMonths.length - 1].slice(0, 3)}`;
     exportXLSX(sheets, `${fname()}-Dues-${className === 'All' ? 'All-Classes' : 'Class-' + className}-${range}-${year}.xlsx`);
     tst(`Dues report downloaded — ${dueCount} student(s) owe tuition`);
@@ -2182,7 +2210,7 @@ function Export({ stats, settings, payments, byClass, archivedPayments, onCWStud
       <div className="sec">Monthly Dues <span className="c">Who still owes — for invoices / chithi</span></div>
       <div className="ec b" style={{ marginBottom: 24 }}>
         <div className="top"><div className="ic"><AlertCircle size={20} /></div><h3>Unpaid Tuition Report</h3></div>
-        <p style={{ marginBottom: 14 }}>Pick a class and a range of months. You'll get an Excel listing <strong>only the students who still owe</strong> monthly tuition in that range — showing the unpaid months, a contact number, and the total due. Students who've paid every month in the range don't appear. Ideal for printing invoices before an exam.</p>
+        <p style={{ marginBottom: 14 }}>Pick a class and a range of months. You'll get an Excel listing <strong>only the students who still owe</strong> monthly tuition — Roll, Name, the unpaid months, their monthly fee, and the total due, with a TOTAL DUE line per class. Fully paid students don't appear. Ideal for printing invoices / chithi before an exam.</p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
           <div>
             <label style={{ display: 'block', fontSize: 11.5, fontWeight: 500, color: '#1F3024', marginBottom: 6, letterSpacing: '.04em', textTransform: 'uppercase' }}>Class</label>

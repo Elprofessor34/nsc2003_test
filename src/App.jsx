@@ -1040,6 +1040,43 @@ function AppInner() {
     exportXLSX([{ name: `Class ${c}`, headers: FEE_REGISTER_COLS, rows: byClass[c].map(s => feeRow(s, byStudent[s.id] || [], year)) }], `${fname()}-Fee-Register-Class-${c}-${year}.xlsx`);
     tst(`Class ${c} fee register (${year}) downloaded`);
   };
+  // Monthly dues report: for a class (or all classes) over a month range, list ONLY the
+  // students who still owe monthly tuition — which months, and the total due. For invoices.
+  const expDuesReport = (className, fromIdx, toIdx, year) => {
+    const from = Math.min(fromIdx, toIdx), to = Math.max(fromIdx, toIdx);
+    const rangeMonths = MONTHS.slice(from, to + 1);
+    const header = ['Roll', 'Name', 'Section', 'Contact', ...rangeMonths, 'Months Due', `Total Due (${settings.currency})`];
+    const buildRows = (studs) => {
+      const rows = [];
+      (studs || []).forEach(s => {
+        const fee = +s.monthlyFee || 0;
+        const sp = byStudent[s.id] || [];
+        const cells = []; const unpaid = []; let totalDue = 0;
+        rangeMonths.forEach(m => {
+          const paid = sp.filter(p => (p.paymentType || PT_MONTHLY) === PT_MONTHLY && p.month === m && +p.year === +year).reduce((a, p) => a + (+p.amount || 0), 0);
+          const due = Math.max(fee - paid, 0);
+          if (fee <= 0) cells.push('—');            // no monthly fee set -> nothing owed
+          else if (due <= 0) cells.push('Paid');
+          else { cells.push('Due'); unpaid.push(m); totalDue += due; }
+        });
+        // Only students who owe something in this range appear.
+        if (totalDue > 0) rows.push([s.rollNumber || '', s.fullName || '', s.section || '', s.parentPhone || s.motherPhone || '', ...cells, unpaid.length, totalDue]);
+      });
+      return rows.sort((a, b) => (parseInt(a[0]) || 9999) - (parseInt(b[0]) || 9999));
+    };
+    let sheets;
+    if (className === 'All') {
+      sheets = CLASSES.filter(c => (byClass[c] || []).length).map(c => ({ name: `Class ${c}`, headers: header, rows: buildRows(byClass[c]) })).filter(sh => sh.rows.length);
+    } else {
+      if (!byClass[className]?.length) { tst(`No students in Class ${className}`); return; }
+      sheets = [{ name: `Class ${className}`, headers: header, rows: buildRows(byClass[className]) }];
+    }
+    const dueCount = sheets.reduce((a, sh) => a + sh.rows.length, 0);
+    if (dueCount === 0) { tst(`No dues for ${rangeMonths[0]}–${rangeMonths[rangeMonths.length - 1]} ${year} — everyone has paid`); return; }
+    const range = `${rangeMonths[0].slice(0, 3)}-${rangeMonths[rangeMonths.length - 1].slice(0, 3)}`;
+    exportXLSX(sheets, `${fname()}-Dues-${className === 'All' ? 'All-Classes' : 'Class-' + className}-${range}-${year}.xlsx`);
+    tst(`Dues report downloaded — ${dueCount} student(s) owe tuition`);
+  };
   // Archived fee register: built from archived payments, grouped by the class & year the
   // student was in when promoted. Same matrix format as the live register.
   const expArchivedRegister = (year) => {
@@ -1123,7 +1160,7 @@ function AppInner() {
         {safePage === 'students' && sel && <StudentDetail student={sel} settings={settings} payments={byStudent[sel.id] || []} vYear={vYear} setVYear={setVYear} onBack={() => setSelId(null)} onEdit={() => { setEditing(sel); setShowEdit(true); }} onDelete={() => setConfDel(sel.id)} onDelPay={delPay} onRecord={() => setShowRecordPay(true)} isAdmin={isAdmin} />}
         {safePage === 'add' && <AddStudent settings={settings} existing={students} onAdd={addStudent} onView={() => setPage('students')} onToast={tst} isAdmin={isAdmin} />}
         {safePage === 'payments' && isAdmin && <Payments students={students} payments={payments} settings={settings} byClass={byClass} fClass={pfClass} setFClass={setPfClass} fMonth={pfMonth} setFMonth={setPfMonth} fType={pfType} setFType={setPfType} onAdd={addPay} onDel={delPay} onOpen={(id) => { setSelId(id); setPage('students'); }} onDownloadAll={expAllPayments} onDownloadClass={expOneClassPayments} onDownloadAllCW={expCWPayments} />}
-        {safePage === 'export' && isAdmin && <Export stats={stats} settings={settings} payments={payments} byClass={byClass} archivedPayments={archivedPayments} onCWStudents={expCWStudents} onAllStudents={expAllStudents} onCWPayments={expCWPayments} onAllPayments={expAllPayments} onFeeRegister={expFeeRegister} onFeeRegisterClass={expFeeRegisterClass} onArchivedRegister={expArchivedRegister} />}
+        {safePage === 'export' && isAdmin && <Export stats={stats} settings={settings} payments={payments} byClass={byClass} archivedPayments={archivedPayments} onCWStudents={expCWStudents} onAllStudents={expAllStudents} onCWPayments={expCWPayments} onAllPayments={expAllPayments} onFeeRegister={expFeeRegister} onFeeRegisterClass={expFeeRegisterClass} onArchivedRegister={expArchivedRegister} onDuesReport={expDuesReport} />}
         {safePage === 'settings' && <SettingsPage settings={settings} onSave={saveCfg} students={students} payments={payments} onClear={() => setConfClear(true)} onSignOut={doSignOut} onToast={tst} onOpenPromote={() => setShowPromote(true)} userEmail={userEmail} profile={profile} isAdmin={isAdmin} />}
        </div>
       </main>
@@ -2091,7 +2128,7 @@ function Payments({ students, payments, settings, byClass, fClass, setFClass, fM
 
 /* ========================  EXPORT  ======================== */
 
-function Export({ stats, settings, payments, byClass, archivedPayments, onCWStudents, onAllStudents, onCWPayments, onAllPayments, onFeeRegister, onFeeRegisterClass, onArchivedRegister }) {
+function Export({ stats, settings, payments, byClass, archivedPayments, onCWStudents, onAllStudents, onCWPayments, onAllPayments, onFeeRegister, onFeeRegisterClass, onArchivedRegister, onDuesReport }) {
   const years = useMemo(() => {
     const set = new Set([new Date().getFullYear()]);
     if (settings.academicYear && !isNaN(+settings.academicYear)) set.add(+settings.academicYear);
@@ -2108,6 +2145,11 @@ function Export({ stats, settings, payments, byClass, archivedPayments, onCWStud
   }, [archivedPayments]);
   const [archYear, setArchYear] = useState('All');
   const hasArchive = (archivedPayments || []).length > 0;
+  // Monthly dues report state
+  const [duesClass, setDuesClass] = useState(classesWith[0] || 'All');
+  const [duesFrom, setDuesFrom] = useState(0);
+  const [duesTo, setDuesTo] = useState(new Date().getMonth());
+  const [duesYear, setDuesYear] = useState(years[0] || new Date().getFullYear());
 
   return (
     <>
@@ -2134,6 +2176,42 @@ function Export({ stats, settings, payments, byClass, archivedPayments, onCWStud
         </div>
         <button className="btn bl" onClick={() => regClass === 'All' ? onFeeRegister(regYear) : onFeeRegisterClass(regClass, regYear)}>
           <FileDown size={14} /> Download Fee Register {regClass === 'All' ? '(All Classes)' : `(Class ${regClass})`} — {regYear}
+        </button>
+      </div>
+
+      <div className="sec">Monthly Dues <span className="c">Who still owes — for invoices / chithi</span></div>
+      <div className="ec b" style={{ marginBottom: 24 }}>
+        <div className="top"><div className="ic"><AlertCircle size={20} /></div><h3>Unpaid Tuition Report</h3></div>
+        <p style={{ marginBottom: 14 }}>Pick a class and a range of months. You'll get an Excel listing <strong>only the students who still owe</strong> monthly tuition in that range — showing the unpaid months, a contact number, and the total due. Students who've paid every month in the range don't appear. Ideal for printing invoices before an exam.</p>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 11.5, fontWeight: 500, color: '#1F3024', marginBottom: 6, letterSpacing: '.04em', textTransform: 'uppercase' }}>Class</label>
+            <select value={duesClass} onChange={e => setDuesClass(e.target.value)} style={{ padding: '10px 13px', fontSize: 14, fontFamily: 'inherit', background: '#FAFBF7', border: '1px solid #D4DDD0', borderRadius: 6, color: '#0B1A12' }}>
+              <option value="All">All Classes (one tab each)</option>
+              {classesWith.map(c => <option key={c} value={c}>Class {c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 11.5, fontWeight: 500, color: '#1F3024', marginBottom: 6, letterSpacing: '.04em', textTransform: 'uppercase' }}>From Month</label>
+            <select value={duesFrom} onChange={e => setDuesFrom(+e.target.value)} style={{ padding: '10px 13px', fontSize: 14, fontFamily: 'inherit', background: '#FAFBF7', border: '1px solid #D4DDD0', borderRadius: 6, color: '#0B1A12' }}>
+              {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 11.5, fontWeight: 500, color: '#1F3024', marginBottom: 6, letterSpacing: '.04em', textTransform: 'uppercase' }}>To Month</label>
+            <select value={duesTo} onChange={e => setDuesTo(+e.target.value)} style={{ padding: '10px 13px', fontSize: 14, fontFamily: 'inherit', background: '#FAFBF7', border: '1px solid #D4DDD0', borderRadius: 6, color: '#0B1A12' }}>
+              {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 11.5, fontWeight: 500, color: '#1F3024', marginBottom: 6, letterSpacing: '.04em', textTransform: 'uppercase' }}>Year</label>
+            <select value={duesYear} onChange={e => setDuesYear(+e.target.value)} style={{ padding: '10px 13px', fontSize: 14, fontFamily: 'inherit', background: '#FAFBF7', border: '1px solid #D4DDD0', borderRadius: 6, color: '#0B1A12' }}>
+              {years.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+        </div>
+        <button className="btn bp" onClick={() => onDuesReport(duesClass, duesFrom, duesTo, duesYear)}>
+          <FileDown size={14} /> Download Dues — {duesClass === 'All' ? 'All Classes' : `Class ${duesClass}`} ({MONTHS[Math.min(duesFrom, duesTo)].slice(0, 3)}–{MONTHS[Math.max(duesFrom, duesTo)].slice(0, 3)} {duesYear})
         </button>
       </div>
 

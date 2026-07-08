@@ -79,10 +79,23 @@ const toPayment = (p) => ({
 })
 
 /* STUDENTS */
+// Supabase returns at most 1000 rows per request. Fetch page after page so a
+// large school (500+ students, thousands of payments) never silently loses rows.
+const fetchAll = async (buildQuery) => {
+  const PAGE = 1000
+  const all = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await buildQuery().range(from, from + PAGE - 1)
+    if (error) throw error
+    all.push(...(data || []))
+    if (!data || data.length < PAGE) break
+  }
+  return all
+}
+
 export const listStudents = async () => {
-  const { data, error } = await supabase.from('students').select('*').order('created_at', { ascending: true })
-  if (error) throw error
-  return (data || []).map(fromStudent)
+  const data = await fetchAll(() => supabase.from('students').select('*').order('created_at', { ascending: true }).order('id', { ascending: true }))
+  return data.map(fromStudent)
 }
 
 export const addStudent = async (s) => {
@@ -121,16 +134,14 @@ export const deleteAllStudents = async () => {
 /* PAYMENTS */
 // Active payments only (archived ones are excluded from the day-to-day views).
 export const listPayments = async () => {
-  const { data, error } = await supabase.from('payments').select('*').eq('archived', false).order('recorded_at', { ascending: false })
-  if (error) throw error
-  return (data || []).map(fromPayment)
+  const data = await fetchAll(() => supabase.from('payments').select('*').eq('archived', false).order('recorded_at', { ascending: false }).order('id', { ascending: true }))
+  return data.map(fromPayment)
 }
 
 // Archived payments (previous classes/years), used for the archived export section.
 export const listArchivedPayments = async () => {
-  const { data, error } = await supabase.from('payments').select('*').eq('archived', true).order('year', { ascending: false })
-  if (error) throw error
-  return (data || []).map(fromPayment)
+  const data = await fetchAll(() => supabase.from('payments').select('*').eq('archived', true).order('year', { ascending: false }).order('id', { ascending: true }))
+  return data.map(fromPayment)
 }
 
 // On promotion: flag a student's active payments as archived, snapshotting the

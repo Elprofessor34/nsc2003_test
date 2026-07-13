@@ -451,6 +451,7 @@ body,.app{font-optical-sizing:auto;text-rendering:optimizeLegibility}
 /* Calmer focus ring + deeper heading ink */
 .fd input:focus,.fd select:focus,.fd textarea:focus,.sr input:focus,.auth-field input:focus{box-shadow:0 0 0 3px rgba(56,102,65,.16)}
 .an-head,.sec,.pt,.dn,.mt,.et{color:#102218}
+.mcell.na{opacity:.45}
 `;
 
 const uid = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
@@ -537,9 +538,23 @@ const niceName = (email) => { const n = shortEmail(email); return n ? n.charAt(0
 const todayLong = () => new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
 // Current-month tuition status for a student: 'paid' | 'partial' | 'unpaid'
+// First month (0-11) a student owes tuition for, in a given year.
+// Students added after Migration 5 (feeFromEnrollment=true) owe from their
+// enrollment month (the enrollment month itself counts). Existing students
+// keep owing from January — nothing changes for them.
+const feeStartIdx = (student, year) => {
+  if (!student?.feeFromEnrollment || !student.enrollmentDate) return 0;
+  const [ey, em] = String(student.enrollmentDate).split('-').map(Number);
+  if (!ey || !em) return 0;
+  if (+year < ey) return 12;   // year before they joined: no months owed
+  if (+year > ey) return 0;    // later years: full year owed
+  return Math.min(Math.max(em - 1, 0), 12);
+};
+
 const monthFeeStatus = (student, sp) => {
   const yr = new Date().getFullYear();
   const mo = MONTHS[new Date().getMonth()];
+  if (new Date().getMonth() < feeStartIdx(student, yr)) return 'paid'; // pre-enrollment: nothing due
   const paid = (sp || []).filter(p => (p.paymentType || PT_MONTHLY) === PT_MONTHLY && p.month === mo && p.year === yr).reduce((a, p) => a + (+p.amount || 0), 0);
   const fee = +student.monthlyFee || 0;
   if (fee > 0) { if (paid >= fee) return 'paid'; if (paid > 0) return 'partial'; return 'unpaid'; }
@@ -665,6 +680,7 @@ function AppInner() {
   const [students, setStudents] = useState([]);
   const [payments, setPayments] = useState([]);
   const [archivedPayments, setArchivedPayments] = useState([]);
+  const [classFees, setClassFees] = useState({});
   const [settings, setSettings] = useState({ schoolName: SCHOOL_DEFAULT, currency: CURRENCY_DEFAULT, defaultMonthlyFee: 0, defaultSessionFee: 0, academicYear: new Date().getFullYear() + '' });
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
@@ -731,9 +747,10 @@ function AppInner() {
       if (cfg) setSettings(s => ({ ...s, ...cfg }));
       // Payments are admin-only (also enforced by the database). Operators never load them.
       if (isAdmin) {
-        const [pys, arch] = await Promise.all([api.listPayments(), api.listArchivedPayments()]);
+        const [pys, arch, cf] = await Promise.all([api.listPayments(), api.listArchivedPayments(), api.listClassFees()]);
         setPayments(pys);
         setArchivedPayments(arch);
+        setClassFees(cf || {});
       } else {
         setPayments([]);
         setArchivedPayments([]);
@@ -978,7 +995,7 @@ function AppInner() {
     // isn't distorted by session/term fees, and stays consistent with the collection ring.
     const tuitionColl = payments.filter(p => (p.paymentType || PT_MONTHLY) === PT_MONTHLY && p.year == yr).reduce((a, p) => a + (+p.amount || 0), 0);
     const expM = students.reduce((a, s) => a + (+s.monthlyFee || 0), 0);
-    const expY = expM * 12;
+    const expY = students.reduce((a, st) => a + (+st.monthlyFee || 0) * (12 - feeStartIdx(st, yr)), 0);
     const out = Math.max(0, expY - tuitionColl);
     return { tStud, tColl, yColl, tuitionColl, expM, expY, out };
   }, [students, payments]);
@@ -1046,64 +1063,86 @@ function AppInner() {
   };
   // Monthly dues report: for a class (or all classes) over a month range, list ONLY the
   // students who still owe monthly tuition — which months, and the total due. For invoices.
-  const expDuesReport = (className, fromIdx, toIdx, year) => {
+  const saveClassFees = async (updated) => {
+    try {
+      const changes = Object.entries(updated).filter(([c, v]) => (+classFees[c] || 0) !== (+v || 0));
+      for (const [c, v] of changes) await api.setClassFee(c, +v || 0);
+      const next = {}; Object.keys(updated).forEach(c => next[c] = +updated[c] || 0);
+      setClassFees(next);
+      tst(changes.length ? 'Class fees saved' : 'No changes to save');
+    } catch (e) { console.error(e); tst('Could not save class fees', 'err'); }
+  };
+  // Fees Due report: EVERY student in the class gets a row. Debtors show the
+  // breakdown (months due / session due / exam due / total); settled students
+  // show "Paid all fees"; free students (teachers' children, no fees set) show
+  // "No fee". Session + each term exam are included via checkboxes.
+  const expDuesReport = (className, fromIdx, toIdx, year, opts = {}) => {
+    const { session = true, t1 = false, t2 = false, tf = false, onlyDues = false } = opts;
     const from = Math.min(fromIdx, toIdx), to = Math.max(fromIdx, toIdx);
-    const rangeMonths = MONTHS.slice(from, to + 1);
-    const rangeLabel = `${rangeMonths[0]} to ${rangeMonths[rangeMonths.length - 1]} ${year}`;
+    const rangeLabel = `${MONTHS[from]} to ${MONTHS[to]} ${year}`;
     const cur = settings.currency;
-    // One row per student who still owes: which months, their own monthly fee, and total due.
+    const tickedExams = [t1 && PT_T1, t2 && PT_T2, tf && PT_TF].filter(Boolean);
+    const included = ['Tuition'].concat(session ? ['Session'] : [], tickedExams.map(t => t.replace(' Exam', '')));
+    const paidSum = (sp, type) => sp.filter(p => p.paymentType === type && +p.year === +year).reduce((a, p) => a + (+p.amount || 0), 0);
     const buildRows = (studs) => {
-      const rows = [];
-      (studs || []).forEach(s => {
-        const fee = +s.monthlyFee || 0;
-        if (fee <= 0) return; // no monthly fee set -> nothing owed
-        const sp = byStudent[s.id] || [];
-        const unpaid = []; let totalDue = 0;
-        rangeMonths.forEach(m => {
+      const rows = []; let owe = 0;
+      (studs || []).forEach(st => {
+        const roll = st.rollNumber || '', name = st.fullName || '';
+        const fee = +st.monthlyFee || 0, sess = +st.sessionFee || 0;
+        if (fee <= 0 && sess <= 0) { // free student (teacher's child): owes nothing, ever
+          if (!onlyDues) rows.push([roll, name, 'No fee', '—', '—', '—', 0]);
+          return;
+        }
+        const sp = byStudent[st.id] || [];
+        const startIdx = feeStartIdx(st, year);
+        const unpaid = []; let monthlyDue = 0;
+        if (fee > 0) for (let i = from; i <= to; i++) {
+          if (i < startIdx) continue; // months before enrollment were never owed
+          const m = MONTHS[i];
           const paid = sp.filter(p => (p.paymentType || PT_MONTHLY) === PT_MONTHLY && p.month === m && +p.year === +year).reduce((a, p) => a + (+p.amount || 0), 0);
           const due = Math.max(fee - paid, 0);
-          if (due > 0) { unpaid.push(m); totalDue += due; }
-        });
-        if (totalDue > 0) rows.push([s.rollNumber || '', s.fullName || '', unpaid.join(', '), fee, totalDue]);
+          if (due > 0) { unpaid.push(m); monthlyDue += due; }
+        }
+        const sessionDue = session && sess > 0 ? Math.max(sess - paidSum(sp, PT_SESSION), 0) : 0;
+        const examFee = +classFees[st.studentClass] || 0;
+        const examDue = examFee > 0 ? tickedExams.reduce((a, t) => a + Math.max(examFee - paidSum(sp, t), 0), 0) : 0;
+        const total = monthlyDue + sessionDue + examDue;
+        if (total <= 0) { if (!onlyDues) rows.push([roll, name, 'Paid all fees', '—', '—', '—', 0]); return; }
+        owe++;
+        rows.push([roll, name, unpaid.join(', ') || '—', sessionDue > 0 ? sessionDue : '—', examDue > 0 ? examDue : '—', fee, total]);
       });
-      return rows.sort((a, b) => (parseInt(a[0]) || 9999) - (parseInt(b[0]) || 9999));
+      return { rows: rows.sort((a, b) => (parseInt(a[0]) || 9999) - (parseInt(b[0]) || 9999)), owe };
     };
-    // Full sheet: title block, header, data, TOTAL DUE row.
     const buildSheet = (cls, rows) => {
-      const grand = rows.reduce((a, r) => a + (+r[4] || 0), 0);
+      const grand = rows.reduce((a, r) => a + (+r[6] || 0), 0);
       return {
         name: `Class ${cls}`,
         aoa: [
           [settings.schoolName || SCHOOL_DEFAULT],
-          [`Tuition Dues — Class ${cls} — ${rangeLabel}`],
+          [`Fees Due — Class ${cls} — ${rangeLabel} — includes: ${included.join(' + ')}`],
           [],
-          ['Roll', 'Name', 'Months Due', `Monthly Fee (${cur})`, `Total (${cur})`],
+          ['Roll', 'Name', 'Months Due', `Session Due (${cur})`, `Exam Due (${cur})`, `Monthly Fee (${cur})`, `Total (${cur})`],
           ...rows,
-          ['', '', '', 'TOTAL DUE', grand],
+          ['', '', '', '', '', 'TOTAL DUE', grand],
         ],
         merges: [
-          { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
-          { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
+          { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
+          { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } },
         ],
-        cols: [{ wch: 8 }, { wch: 26 }, { wch: 46 }, { wch: 16 }, { wch: 12 }],
+        cols: [{ wch: 8 }, { wch: 26 }, { wch: 40 }, { wch: 15 }, { wch: 14 }, { wch: 15 }, { wch: 12 }],
       };
     };
-    let sheets;
-    if (className === 'All') {
-      sheets = CLASSES.filter(c => (byClass[c] || []).length)
-        .map(c => ({ cls: c, rows: buildRows(byClass[c]) }))
-        .filter(x => x.rows.length)
-        .map(x => buildSheet(x.cls, x.rows));
-    } else {
-      if (!byClass[className]?.length) { tst(`No students in Class ${className}`); return; }
-      const rows = buildRows(byClass[className]);
-      sheets = rows.length ? [buildSheet(className, rows)] : [];
-    }
-    const dueCount = sheets.reduce((a, sh) => a + (sh.aoa.length - 5), 0); // minus 4 header rows + 1 total row
-    if (dueCount <= 0) { tst(`No dues for ${rangeMonths[0]}–${rangeMonths[rangeMonths.length - 1]} ${year} — everyone has paid`); return; }
-    const range = `${rangeMonths[0].slice(0, 3)}-${rangeMonths[rangeMonths.length - 1].slice(0, 3)}`;
+    let sheets = [], oweCount = 0, listed = 0;
+    if (className !== 'All' && !byClass[className]?.length) { tst(`No students in Class ${className}`); return; }
+    const clsList = className === 'All' ? CLASSES.filter(c => (byClass[c] || []).length) : [className];
+    clsList.forEach(c => {
+      const { rows, owe } = buildRows(byClass[c]);
+      if (rows.length) { sheets.push(buildSheet(c, rows)); oweCount += owe; listed += rows.length; }
+    });
+    if (!sheets.length) { tst('Nothing to export for that selection'); return; }
+    const range = `${MONTHS[from].slice(0, 3)}-${MONTHS[to].slice(0, 3)}`;
     exportXLSX(sheets, `${fname()}-Dues-${className === 'All' ? 'All-Classes' : 'Class-' + className}-${range}-${year}.xlsx`);
-    tst(`Dues report downloaded — ${dueCount} student(s) owe tuition`);
+    tst(oweCount > 0 ? `Dues report downloaded — ${oweCount} of ${listed} student(s) owe` : 'Downloaded — no one owes for that selection');
   };
   // Archived fee register: built from archived payments, grouped by the class & year the
   // student was in when promoted. Same matrix format as the live register.
@@ -1187,9 +1226,9 @@ function AppInner() {
         {safePage === 'students' && !sel && <StudentsList students={students} byClass={byClass} settings={settings} byStudent={byStudent} selClass={selClass} setSelClass={setSelClass} onOpen={setSelId} onAdd={() => setPage('add')} onDownloadAll={expAllStudents} onDownloadClass={expOneClassStudents} onDownloadAllCW={expCWStudents} onPromote={() => setShowPromote(true)} isAdmin={isAdmin} />}
         {safePage === 'students' && sel && <StudentDetail student={sel} settings={settings} payments={byStudent[sel.id] || []} vYear={vYear} setVYear={setVYear} onBack={() => setSelId(null)} onEdit={() => { setEditing(sel); setShowEdit(true); }} onDelete={() => setConfDel(sel.id)} onDelPay={delPay} onRecord={() => setShowRecordPay(true)} isAdmin={isAdmin} />}
         {safePage === 'add' && <AddStudent settings={settings} existing={students} onAdd={addStudent} onView={() => setPage('students')} onToast={tst} isAdmin={isAdmin} />}
-        {safePage === 'payments' && isAdmin && <Payments students={students} payments={payments} settings={settings} byClass={byClass} fClass={pfClass} setFClass={setPfClass} fMonth={pfMonth} setFMonth={setPfMonth} fType={pfType} setFType={setPfType} onAdd={addPay} onDel={delPay} onOpen={(id) => { setSelId(id); setPage('students'); }} onDownloadAll={expAllPayments} onDownloadClass={expOneClassPayments} onDownloadAllCW={expCWPayments} />}
+        {safePage === 'payments' && isAdmin && <Payments students={students} payments={payments} settings={settings} byClass={byClass} classFees={classFees} fClass={pfClass} setFClass={setPfClass} fMonth={pfMonth} setFMonth={setPfMonth} fType={pfType} setFType={setPfType} onAdd={addPay} onDel={delPay} onOpen={(id) => { setSelId(id); setPage('students'); }} onDownloadAll={expAllPayments} onDownloadClass={expOneClassPayments} onDownloadAllCW={expCWPayments} />}
         {safePage === 'export' && isAdmin && <Export stats={stats} settings={settings} payments={payments} byClass={byClass} archivedPayments={archivedPayments} onCWStudents={expCWStudents} onAllStudents={expAllStudents} onCWPayments={expCWPayments} onAllPayments={expAllPayments} onFeeRegister={expFeeRegister} onFeeRegisterClass={expFeeRegisterClass} onArchivedRegister={expArchivedRegister} onDuesReport={expDuesReport} />}
-        {safePage === 'settings' && <SettingsPage settings={settings} onSave={saveCfg} students={students} payments={payments} onClear={() => setConfClear(true)} onSignOut={doSignOut} onToast={tst} onOpenPromote={() => setShowPromote(true)} userEmail={userEmail} profile={profile} isAdmin={isAdmin} />}
+        {safePage === 'settings' && <SettingsPage settings={settings} onSave={saveCfg} students={students} payments={payments} onClear={() => setConfClear(true)} onSignOut={doSignOut} onToast={tst} onOpenPromote={() => setShowPromote(true)} userEmail={userEmail} profile={profile} isAdmin={isAdmin} classFees={classFees} onSaveClassFees={saveClassFees} />}
        </div>
       </main>
 
@@ -1203,7 +1242,7 @@ function AppInner() {
 
       {showEdit && editing && <StudentForm student={editing} settings={settings} existing={students} onClose={() => { setShowEdit(false); setEditing(null); }} onSave={updStudent} onToast={tst} isAdmin={isAdmin} />}
       {showPromote && <PromoteModal byClass={byClass} onClose={() => setShowPromote(false)} onPromote={promote} currency={settings.currency} />}
-      {showRecordPay && sel && isAdmin && <RecordPaymentModal student={sel} settings={settings} studentPayments={byStudent[sel.id] || []} onClose={() => setShowRecordPay(false)} onAdd={addPay} onToast={tst} />}
+      {showRecordPay && sel && isAdmin && <RecordPaymentModal student={sel} settings={settings} studentPayments={byStudent[sel.id] || []} classFees={classFees} onClose={() => setShowRecordPay(false)} onAdd={addPay} onToast={tst} />}
 
       {confDel && (
         <div className="mov" onClick={() => setConfDel(null)}>
@@ -1765,7 +1804,14 @@ function StudentDetail({ student, settings, payments, vYear, setVYear, onBack, o
         <div style={{ fontSize: 12.5, color: '#5C6B5F', marginBottom: 12 }}>Green = fully paid · Olive = partial · Empty = unpaid</div>
         <div className="mg">
           {MONTHS.map((m, i) => {
+            const exempt = i < feeStartIdx(student, vYear);
             const st = stat(m); const amt = mTot[m];
+            if (exempt && amt <= 0) return (
+              <div key={m} className="mcell na" title="Before enrollment — not owed">
+                <div className="mn">{M_SHORT[i]}</div>
+                <div className="ma">N/A</div>
+              </div>
+            );
             return (
               <div key={m} className={`mcell ${st}`}>
                 <div className="mn">{M_SHORT[i]}</div>
@@ -1968,7 +2014,7 @@ function AddStudent({ settings, existing, onAdd, onView, onToast, isAdmin }) {
 
 /* ========================  PAYMENTS  ======================== */
 
-function Payments({ students, payments, settings, byClass, fClass, setFClass, fMonth, setFMonth, fType, setFType, onAdd, onDel, onOpen, onDownloadAll, onDownloadClass, onDownloadAllCW }) {
+function Payments({ students, payments, settings, byClass, classFees, fClass, setFClass, fMonth, setFMonth, fType, setFType, onAdd, onDel, onOpen, onDownloadAll, onDownloadClass, onDownloadAllCW }) {
   const [f, setF] = useState({
     studentClass: '', studentId: '', paymentType: PT_MONTHLY,
     month: MONTHS[new Date().getMonth()], year: new Date().getFullYear(),
@@ -1985,6 +2031,7 @@ function Payments({ students, payments, settings, byClass, fClass, setFClass, fM
     if (!selS) return '';
     if (f.paymentType === PT_MONTHLY) return selS.monthlyFee || '';
     if (f.paymentType === PT_SESSION) return selS.sessionFee || '';
+    if (TERM_TYPES.includes(f.paymentType)) return classFees?.[selS.studentClass] || '';
     return '';
   };
   useEffect(() => {
@@ -2178,6 +2225,11 @@ function Export({ stats, settings, payments, byClass, archivedPayments, onCWStud
   const [duesFrom, setDuesFrom] = useState(0);
   const [duesTo, setDuesTo] = useState(new Date().getMonth());
   const [duesYear, setDuesYear] = useState(years[0] || new Date().getFullYear());
+  const [duesSession, setDuesSession] = useState(true);
+  const [duesT1, setDuesT1] = useState(false);
+  const [duesT2, setDuesT2] = useState(false);
+  const [duesTF, setDuesTF] = useState(false);
+  const [duesOnly, setDuesOnly] = useState(false);
 
   return (
     <>
@@ -2207,10 +2259,10 @@ function Export({ stats, settings, payments, byClass, archivedPayments, onCWStud
         </button>
       </div>
 
-      <div className="sec">Monthly Dues <span className="c">Who still owes — for invoices / chithi</span></div>
+      <div className="sec">Fees Due <span className="c">Who owes what — for invoices / chithi</span></div>
       <div className="ec b" style={{ marginBottom: 24 }}>
-        <div className="top"><div className="ic"><AlertCircle size={20} /></div><h3>Unpaid Tuition Report</h3></div>
-        <p style={{ marginBottom: 14 }}>Pick a class and a range of months. You'll get an Excel listing <strong>only the students who still owe</strong> monthly tuition — Roll, Name, the unpaid months, their monthly fee, and the total due, with a TOTAL DUE line per class. Fully paid students don't appear. Ideal for printing invoices / chithi before an exam.</p>
+        <div className="top"><div className="ic"><AlertCircle size={20} /></div><h3>Fees Due Report</h3></div>
+        <p style={{ marginBottom: 14 }}>Pick a class, a month range, and which fees to include. <strong>Every student is listed</strong>: who owes shows the breakdown (months due, session due, exam due, total), settled students show <strong>Paid all fees</strong>, and free students (teachers' children) show <strong>No fee</strong>. Ideal for printing invoices / chithi before an exam.</p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
           <div>
             <label style={{ display: 'block', fontSize: 11.5, fontWeight: 500, color: '#1F3024', marginBottom: 6, letterSpacing: '.04em', textTransform: 'uppercase' }}>Class</label>
@@ -2238,8 +2290,17 @@ function Export({ stats, settings, payments, byClass, archivedPayments, onCWStud
             </select>
           </div>
         </div>
-        <button className="btn bp" onClick={() => onDuesReport(duesClass, duesFrom, duesTo, duesYear)}>
-          <FileDown size={14} /> Download Dues — {duesClass === 'All' ? 'All Classes' : `Class ${duesClass}`} ({MONTHS[Math.min(duesFrom, duesTo)].slice(0, 3)}–{MONTHS[Math.max(duesFrom, duesTo)].slice(0, 3)} {duesYear})
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center', margin: '2px 0 16px', fontSize: 13, color: '#1F3024' }}>
+          <span style={{ fontSize: 11.5, fontWeight: 500, letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C6B5F' }}>Include:</span>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}><input type="checkbox" checked={duesSession} onChange={e => setDuesSession(e.target.checked)} /> Session Fee</label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}><input type="checkbox" checked={duesT1} onChange={e => setDuesT1(e.target.checked)} /> 1st Term Exam</label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}><input type="checkbox" checked={duesT2} onChange={e => setDuesT2(e.target.checked)} /> 2nd Term Exam</label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}><input type="checkbox" checked={duesTF} onChange={e => setDuesTF(e.target.checked)} /> Final Term Exam</label>
+          <span style={{ width: 1, height: 18, background: '#D4DDD0' }}></span>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}><input type="checkbox" checked={duesOnly} onChange={e => setDuesOnly(e.target.checked)} /> Only students with dues</label>
+        </div>
+        <button className="btn bp" onClick={() => onDuesReport(duesClass, duesFrom, duesTo, duesYear, { session: duesSession, t1: duesT1, t2: duesT2, tf: duesTF, onlyDues: duesOnly })}>
+          <FileDown size={14} /> Download Fees Due — {duesClass === 'All' ? 'All Classes' : `Class ${duesClass}`} ({MONTHS[Math.min(duesFrom, duesTo)].slice(0, 3)}–{MONTHS[Math.max(duesFrom, duesTo)].slice(0, 3)} {duesYear})
         </button>
       </div>
 
@@ -2322,7 +2383,7 @@ function Export({ stats, settings, payments, byClass, archivedPayments, onCWStud
 
 /* ========================  SETTINGS  ======================== */
 
-function SettingsPage({ settings, onSave, students, payments, onClear, onSignOut, onToast, onOpenPromote, userEmail, profile, isAdmin }) {
+function SettingsPage({ settings, onSave, students, payments, onClear, onSignOut, onToast, onOpenPromote, userEmail, profile, isAdmin, classFees, onSaveClassFees }) {
   const [l, setL] = useState(settings);
   useEffect(() => setL(settings), [settings]);
   const s = (k, v) => { const n = { ...l, [k]: v }; setL(n); onSave(n); };
@@ -2365,6 +2426,8 @@ function SettingsPage({ settings, onSave, students, payments, onClear, onSignOut
         <div className="fss">When a new academic year begins, promote students from one class to the next in a single step. For Class Nine & Ten, you'll be asked to assign Science or Humanities.</div>
         <button className="btn bp" onClick={onOpenPromote}><ArrowRightCircle size={14} /> Open Promote Tool</button>
       </div>}
+
+      {isAdmin && <ClassFeesCard classFees={classFees} onSave={onSaveClassFees} currency={settings.currency} />}
 
       {isAdmin && <TeamManager userEmail={userEmail} onToast={onToast} />}
 
@@ -2557,9 +2620,37 @@ function PromoteModal({ byClass, onClose, onPromote, currency }) {
 
 /* ========================  EDIT STUDENT MODAL  ======================== */
 
+/* ========================  CLASS EXAM FEES  ======================== */
+
+function ClassFeesCard({ classFees, onSave, currency }) {
+  const init = () => { const o = {}; CLASSES.forEach(c => o[c] = classFees?.[c] ?? 0); return o; };
+  const [l, setL] = useState(init);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setL(init()); }, [classFees]);
+  const dirty = CLASSES.some(c => (+l[c] || 0) !== (+classFees?.[c] || 0));
+  const save = async () => { setBusy(true); await onSave(l); setBusy(false); };
+  return (
+    <div className="fs" style={{ maxWidth: 600 }}>
+      <div className="fst"><BookOpen size={16} /> Class Exam Fees</div>
+      <div className="fss">The term-exam fee for each class — the same rate applies to the First, Second, and Final Term exams. It auto-fills exam payments and powers the exam column in the Fees Due export. Update these when rates change.</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
+        {CLASSES.map(c => (
+          <div className="fd" key={c} style={{ marginBottom: 0 }}>
+            <label>Class {c} ({currency})</label>
+            <input type="number" value={l[c]} onChange={e => setL(x => ({ ...x, [c]: e.target.value }))} placeholder="0" />
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 14 }}>
+        <button className="btn bp" onClick={save} disabled={!dirty || busy}><Check size={14} /> {busy ? 'Saving\u2026' : 'Save Class Fees'}</button>
+      </div>
+    </div>
+  );
+}
+
 /* ========================  RECORD PAYMENT (from a student profile)  ======================== */
 
-function RecordPaymentModal({ student, settings, studentPayments, onClose, onAdd, onToast }) {
+function RecordPaymentModal({ student, settings, studentPayments, classFees, onClose, onAdd, onToast }) {
   const [f, setF] = useState({
     paymentType: PT_MONTHLY,
     month: MONTHS[new Date().getMonth()],
@@ -2575,6 +2666,7 @@ function RecordPaymentModal({ student, settings, studentPayments, onClose, onAdd
   const autoAmount = () => {
     if (f.paymentType === PT_MONTHLY) return student.monthlyFee || '';
     if (f.paymentType === PT_SESSION) return student.sessionFee || '';
+    if (TERM_TYPES.includes(f.paymentType)) return classFees?.[student.studentClass] || '';
     return '';
   };
   useEffect(() => { s('amount', autoAmount()); }, [f.paymentType, f.month]);
@@ -2643,6 +2735,9 @@ function RecordPaymentModal({ student, settings, studentPayments, onClose, onAdd
                 ? <div className="hi">Auto-filled from the monthly fee ({fmt(student.monthlyFee, settings.currency)}). Change only for a partial payment.</div>
                 : <div className="wn"><AlertCircle size={13} /> No monthly fee set. Type the amount, or edit the student to set one.</div>)}
               {f.paymentType === PT_SESSION && student.sessionFee > 0 && <div className="hi">Auto-filled from the session fee ({fmt(student.sessionFee, settings.currency)}).</div>}
+              {TERM_TYPES.includes(f.paymentType) && (+classFees?.[student.studentClass] > 0
+                ? <div className="hi">Auto-filled from Class Fees ({fmt(classFees[student.studentClass], settings.currency)} for Class {student.studentClass}).</div>
+                : <div className="wn"><AlertCircle size={13} /> No exam fee set for Class {student.studentClass} — add it in Settings → Class Exam Fees.</div>)}
             </div>
             <div className="fd"><label>Method</label>
               <select value={f.method} onChange={e => s('method', e.target.value)}>

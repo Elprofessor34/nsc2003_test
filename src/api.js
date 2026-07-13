@@ -19,6 +19,7 @@ const fromStudent = (r) => r ? ({
   monthlyFee: Number(r.monthly_fee) || 0,
   sessionFee: Number(r.session_fee) || 0,
   notes: r.notes,
+  feeFromEnrollment: !!r.fee_from_enrollment,
   hasPhoto: !!r.has_photo,
   photoUrl: r.photo_url,
   createdAt: r.created_at,
@@ -82,15 +83,17 @@ const toPayment = (p) => ({
 // Supabase returns at most 1000 rows per request. Fetch page after page so a
 // large school (500+ students, thousands of payments) never silently loses rows.
 const fetchAll = async (buildQuery) => {
-  const PAGE = 1000
+  const PAGE = 1000, WAVE = 4 // fetch 4 pages in parallel per round
   const all = []
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await buildQuery().range(from, from + PAGE - 1)
-    if (error) throw error
-    all.push(...(data || []))
-    if (!data || data.length < PAGE) break
+  for (let wave = 0; ; wave++) {
+    const starts = Array.from({ length: WAVE }, (_, i) => (wave * WAVE + i) * PAGE)
+    const results = await Promise.all(starts.map(st => buildQuery().range(st, st + PAGE - 1)))
+    for (const { data, error } of results) {
+      if (error) throw error
+      all.push(...(data || []))
+      if (!data || data.length < PAGE) return all
+    }
   }
-  return all
 }
 
 export const listStudents = async () => {
@@ -170,6 +173,22 @@ export const deletePayment = async (id) => {
 
 export const deleteAllPayments = async () => {
   const { error } = await supabase.from('payments').delete().neq('id', '__never_match__')
+  if (error) throw error
+}
+
+/* CLASS EXAM FEES (admin-only) */
+// One exam-fee rate per class; the same rate applies to each term exam.
+export const listClassFees = async () => {
+  const { data, error } = await supabase.from('class_fees').select('*')
+  if (error) { console.error('listClassFees', error); return {} }
+  const map = {}
+  ;(data || []).forEach(r => { map[r.class] = Number(r.exam_fee) || 0 })
+  return map
+}
+
+export const setClassFee = async (className, examFee) => {
+  const { error } = await supabase.from('class_fees')
+    .upsert({ class: className, exam_fee: Number(examFee) || 0, updated_at: new Date().toISOString() })
   if (error) throw error
 }
 

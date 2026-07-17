@@ -681,6 +681,7 @@ function AppInner() {
   const [payments, setPayments] = useState([]);
   const [archivedPayments, setArchivedPayments] = useState([]);
   const [classFees, setClassFees] = useState({});
+  const [team, setTeam] = useState([]);
   const [settings, setSettings] = useState({ schoolName: SCHOOL_DEFAULT, currency: CURRENCY_DEFAULT, defaultMonthlyFee: 0, defaultSessionFee: 0, academicYear: new Date().getFullYear() + '' });
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
@@ -747,10 +748,11 @@ function AppInner() {
       if (cfg) setSettings(s => ({ ...s, ...cfg }));
       // Payments are admin-only (also enforced by the database). Operators never load them.
       if (isAdmin) {
-        const [pys, arch, cf] = await Promise.all([api.listPayments(), api.listArchivedPayments(), api.listClassFees()]);
+        const [pys, arch, cf, tm] = await Promise.all([api.listPayments(), api.listArchivedPayments(), api.listClassFees(), api.listProfiles()]);
         setPayments(pys);
         setArchivedPayments(arch);
         setClassFees(cf || {});
+        setTeam(tm || []);
       } else {
         setPayments([]);
         setArchivedPayments([]);
@@ -1063,6 +1065,17 @@ function AppInner() {
   };
   // Monthly dues report: for a class (or all classes) over a month range, list ONLY the
   // students who still owe monthly tuition — which months, and the total due. For invoices.
+  // Show a person's chosen name where we have it; fall back to their email.
+  const nameFor = (email) => (team.find(t => t.email === email)?.displayName) || email || '—';
+  const saveDisplayName = async (name) => {
+    try {
+      await api.setDisplayName(name);
+      const clean = (name || '').trim();
+      setProfile(p => p ? { ...p, displayName: clean } : p);
+      setTeam(ts => ts.map(t => t.email === userEmail ? { ...t, displayName: clean } : t));
+      tst(clean ? 'Name saved' : 'Name cleared');
+    } catch (e) { console.error(e); tst('Could not save name', 'err'); }
+  };
   const saveClassFees = async (updated) => {
     try {
       const changes = Object.entries(updated).filter(([c, v]) => (+classFees[c] || 0) !== (+v || 0));
@@ -1190,12 +1203,13 @@ function AppInner() {
     { id: 'students', l: 'Students', ic: Users },
     { id: 'add', l: 'Add Student', ic: UserPlus },
     { id: 'payments', l: 'Payments', ic: Banknote },
+    { id: 'history', l: 'History', ic: History },
     { id: 'export', l: 'Export', ic: FileSpreadsheet },
     { id: 'settings', l: 'Settings', ic: Cog }
   ];
-  const tabs = isAdmin ? allTabs : allTabs.filter(t => t.id !== 'payments' && t.id !== 'export');
+  const tabs = isAdmin ? allTabs : allTabs.filter(t => t.id !== 'payments' && t.id !== 'export' && t.id !== 'history');
   // If an operator is somehow pointed at a money page, fall back to the dashboard.
-  const safePage = (!isAdmin && (page === 'payments' || page === 'export')) ? 'dashboard' : page;
+  const safePage = (!isAdmin && (page === 'payments' || page === 'export' || page === 'history')) ? 'dashboard' : page;
   const go = (p) => { setPage(p); setSelId(null); };
 
   return (
@@ -1222,13 +1236,14 @@ function AppInner() {
 
       <main className="main">
        <div className="fade-in" key={sel ? 'detail' : safePage}>
-        {safePage === 'dashboard' && <Dashboard stats={stats} settings={settings} students={students} payments={payments} byClass={byClass} onGo={go} onOpen={(id) => { setSelId(id); setPage('students'); }} userEmail={userEmail} isAdmin={isAdmin} />}
+        {safePage === 'dashboard' && <Dashboard stats={stats} settings={settings} students={students} payments={payments} byClass={byClass} onGo={go} onOpen={(id) => { setSelId(id); setPage('students'); }} userEmail={userEmail} userName={profile?.displayName} isAdmin={isAdmin} />}
         {safePage === 'students' && !sel && <StudentsList students={students} byClass={byClass} settings={settings} byStudent={byStudent} selClass={selClass} setSelClass={setSelClass} onOpen={setSelId} onAdd={() => setPage('add')} onDownloadAll={expAllStudents} onDownloadClass={expOneClassStudents} onDownloadAllCW={expCWStudents} onPromote={() => setShowPromote(true)} isAdmin={isAdmin} />}
         {safePage === 'students' && sel && <StudentDetail student={sel} settings={settings} payments={byStudent[sel.id] || []} vYear={vYear} setVYear={setVYear} onBack={() => setSelId(null)} onEdit={() => { setEditing(sel); setShowEdit(true); }} onDelete={() => setConfDel(sel.id)} onDelPay={delPay} onRecord={() => setShowRecordPay(true)} isAdmin={isAdmin} />}
         {safePage === 'add' && <AddStudent settings={settings} existing={students} onAdd={addStudent} onView={() => setPage('students')} onToast={tst} isAdmin={isAdmin} />}
         {safePage === 'payments' && isAdmin && <Payments students={students} payments={payments} settings={settings} byClass={byClass} classFees={classFees} fClass={pfClass} setFClass={setPfClass} fMonth={pfMonth} setFMonth={setPfMonth} fType={pfType} setFType={setPfType} onAdd={addPay} onDel={delPay} onOpen={(id) => { setSelId(id); setPage('students'); }} onDownloadAll={expAllPayments} onDownloadClass={expOneClassPayments} onDownloadAllCW={expCWPayments} />}
+        {safePage === 'history' && isAdmin && <PaymentHistory payments={payments} students={students} settings={settings} nameFor={nameFor} onOpen={(id) => { setSelId(id); setPage('students'); }} onDel={delPay} />}
         {safePage === 'export' && isAdmin && <Export stats={stats} settings={settings} payments={payments} byClass={byClass} archivedPayments={archivedPayments} onCWStudents={expCWStudents} onAllStudents={expAllStudents} onCWPayments={expCWPayments} onAllPayments={expAllPayments} onFeeRegister={expFeeRegister} onFeeRegisterClass={expFeeRegisterClass} onArchivedRegister={expArchivedRegister} onDuesReport={expDuesReport} />}
-        {safePage === 'settings' && <SettingsPage settings={settings} onSave={saveCfg} students={students} payments={payments} onClear={() => setConfClear(true)} onSignOut={doSignOut} onToast={tst} onOpenPromote={() => setShowPromote(true)} userEmail={userEmail} profile={profile} isAdmin={isAdmin} classFees={classFees} onSaveClassFees={saveClassFees} />}
+        {safePage === 'settings' && <SettingsPage settings={settings} onSave={saveCfg} students={students} payments={payments} onClear={() => setConfClear(true)} onSignOut={doSignOut} onToast={tst} onOpenPromote={() => setShowPromote(true)} userEmail={userEmail} profile={profile} isAdmin={isAdmin} classFees={classFees} onSaveClassFees={saveClassFees} onSaveName={saveDisplayName} />}
        </div>
       </main>
 
@@ -1519,7 +1534,7 @@ function TeamManager({ userEmail, onToast }) {
                 <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#FFFFFF', border: '1px solid #E6ECE1', borderRadius: 7, padding: '10px 12px', flexWrap: 'wrap' }}>
                   <div style={{ width: 32, height: 32, borderRadius: '50%', background: p.isAdmin ? '#D8E5D5' : '#EDEFE6', color: p.isAdmin ? '#1B4332' : '#5C6B2F', display: 'grid', placeItems: 'center', flexShrink: 0 }}>{p.isAdmin ? <ShieldCheck size={15} /> : <User size={15} />}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 500, color: '#0B1A12', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.email} {isSelf && <span style={{ fontSize: 11, color: '#386641', fontWeight: 500 }}>· you</span>}</div>
+                    <div style={{ fontSize: 13.5, fontWeight: 500, color: '#0B1A12', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.displayName ? <>{p.displayName} <span style={{ color: '#8B9A8E', fontWeight: 400, fontSize: 12 }}>· {p.email}</span></> : p.email} {isSelf && <span style={{ fontSize: 11, color: '#386641', fontWeight: 500 }}>· you</span>}</div>
                     <div style={{ fontSize: 11.5, color: '#5C6B5F', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ fontWeight: 600, color: p.isAdmin ? '#1B4332' : '#5C6B2F', letterSpacing: '.03em', textTransform: 'uppercase', fontSize: 10.5 }}>{p.isAdmin ? 'Admin' : 'Operator'}</span>
                       · Joined {p.createdAt ? fmtDT(p.createdAt) : '—'}
@@ -1545,7 +1560,7 @@ function TeamManager({ userEmail, onToast }) {
 
 /* ========================  DASHBOARD  ======================== */
 
-function Dashboard({ stats, settings, students, payments, byClass, onGo, onOpen, userEmail, isAdmin }) {
+function Dashboard({ stats, settings, students, payments, byClass, onGo, onOpen, userEmail, userName, isAdmin }) {
   const recent = useMemo(() => [...payments].sort((a, b) => (b.recordedAt || b.paidDate || '').localeCompare(a.recordedAt || a.paidDate || '')).slice(0, 6), [payments]);
   const yr = new Date().getFullYear();
   // Monthly tuition collected per fee-month, this year
@@ -1558,7 +1573,7 @@ function Dashboard({ stats, settings, students, payments, byClass, onGo, onOpen,
     <>
       <div className="ph">
         <div>
-          <div className="greet">{greetWord()}, <b>{niceName(userEmail)}</b> · {todayLong()}</div>
+          <div className="greet">{greetWord()}, <b>{userName || niceName(userEmail)}</b> · {todayLong()}</div>
           <h1 className="pt">Dashboard</h1>
           <div className="ps">A snapshot of your school today.</div>
         </div>
@@ -2383,7 +2398,11 @@ function Export({ stats, settings, payments, byClass, archivedPayments, onCWStud
 
 /* ========================  SETTINGS  ======================== */
 
-function SettingsPage({ settings, onSave, students, payments, onClear, onSignOut, onToast, onOpenPromote, userEmail, profile, isAdmin, classFees, onSaveClassFees }) {
+function SettingsPage({ settings, onSave, students, payments, onClear, onSignOut, onToast, onOpenPromote, userEmail, profile, isAdmin, classFees, onSaveClassFees, onSaveName }) {
+  const [dn, setDn] = useState(profile?.displayName || '');
+  const [dnBusy, setDnBusy] = useState(false);
+  useEffect(() => { setDn(profile?.displayName || ''); }, [profile?.displayName]);
+  const saveName = async () => { setDnBusy(true); await onSaveName(dn); setDnBusy(false); };
   const [l, setL] = useState(settings);
   useEffect(() => setL(settings), [settings]);
   const s = (k, v) => { const n = { ...l, [k]: v }; setL(n); onSave(n); };
@@ -2437,6 +2456,13 @@ function SettingsPage({ settings, onSave, students, payments, onClear, onSignOut
         {isAdmin && <div style={{ fontSize: 12.5, color: '#5C6B5F', lineHeight: 1.55, marginBottom: 16 }}>
           New staff create their own account from the sign-in page, but they can't see or change anything until you approve them in the Team Access section above. Each payment records which admin entered it and the exact time.
         </div>}
+        <div className="fst" style={{ fontSize: 14, marginTop: 18 }}><User size={14} /> Display Name</div>
+        <div className="fss">Shown in greetings and Team Access instead of your email. Every account can set its own.</div>
+        <div className="fr2" style={{ alignItems: 'flex-end' }}>
+          <div className="fd" style={{ marginBottom: 0 }}><label>Your Name</label><input value={dn} onChange={e => setDn(e.target.value)} placeholder="e.g. Fahad" maxLength={40} /></div>
+          <div style={{ paddingBottom: 2 }}><button className="btn bp" onClick={saveName} disabled={dnBusy || (dn || '').trim() === (profile?.displayName || '')}><Check size={14} /> {dnBusy ? 'Saving\u2026' : 'Save Name'}</button></div>
+        </div>
+
         <div className="fst" style={{ fontSize: 14, marginTop: 18 }}><Lock size={14} /> Change Password</div>
         <div className="fss">Update your password. You'll keep using the current one until you confirm a new one.</div>
         <div className="fr2">
@@ -2619,6 +2645,67 @@ function PromoteModal({ byClass, onClose, onPromote, currency }) {
 }
 
 /* ========================  EDIT STUDENT MODAL  ======================== */
+
+/* ========================  PAYMENT HISTORY  ======================== */
+
+function PaymentHistory({ payments, students, settings, nameFor, onOpen, onDel }) {
+  const [q, setQ] = useState('');
+  const [limit, setLimit] = useState(100);
+  const [confId, setConfId] = useState(null);
+  const sMap = useMemo(() => { const m = {}; students.forEach(st => m[st.id] = st); return m; }, [students]);
+  const sorted = useMemo(() => [...payments].sort((a, b) => String(b.recordedAt || b.paidDate || '').localeCompare(String(a.recordedAt || a.paidDate || ''))), [payments]);
+  const filtered = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (!t) return sorted;
+    return sorted.filter(p => {
+      const st = sMap[p.studentId];
+      return (st?.fullName || '').toLowerCase().includes(t)
+        || String(st?.rollNumber || '').toLowerCase() === t
+        || (p.paymentType || '').toLowerCase().includes(t)
+        || (p.recordedBy || '').toLowerCase().includes(t)
+        || (nameFor(p.recordedBy) || '').toLowerCase().includes(t);
+    });
+  }, [sorted, q, sMap]);
+  useEffect(() => { setLimit(100); setConfId(null); }, [q]);
+  const visible = filtered.slice(0, limit);
+  return (
+    <>
+      <div className="ph">
+        <div><h1 className="pt">Payment History</h1><div className="ps">{payments.length} payment(s) on record, newest first. Search by student, roll, type, or who recorded it.</div></div>
+      </div>
+      <div className="sr" style={{ maxWidth: 440, marginBottom: 14 }}>
+        <Search size={15} />
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search student, roll, type, recorder\u2026" />
+      </div>
+      {filtered.length === 0 ? <div className="em" style={{ padding: '32px 24px' }}><div className="es" style={{ marginBottom: 0 }}>No payments match.</div></div> : (
+        <div className="list">
+          {visible.map(p => {
+            const st = sMap[p.studentId];
+            const ptype = p.paymentType || PT_MONTHLY;
+            return (
+              <div key={p.id} className="lr" style={{ gridTemplateColumns: 'auto minmax(0,2fr) minmax(0,1fr) minmax(0,1.4fr) auto 40px' }} onClick={() => st && onOpen(st.id)}>
+                <Avatar student={st} />
+                <div className="cnt"><div className="n">{st?.fullName || 'Unknown student'}</div><div className="m">{st?.studentClass ? `Class ${st.studentClass}` : ''}{st?.rollNumber ? ` \u00b7 Roll ${st.rollNumber}` : ''} \u00b7 {ptype}</div></div>
+                <div style={{ fontSize: 12.5, color: '#5C6B5F' }}>{p.month ? `${p.month} ` : ''}{p.year}</div>
+                <div style={{ fontSize: 11.5, color: '#5C6B5F', lineHeight: 1.45 }}>{nameFor(p.recordedBy)}<br />{p.recordedAt ? fmtDT(p.recordedAt) : (p.paidDate || '')}</div>
+                <div className="pa">+{fmt(p.amount, settings.currency)}</div>
+                {confId === p.id
+                  ? <button className="btn bd sm" style={{ padding: '5px 8px' }} onClick={(e) => { e.stopPropagation(); onDel(p.id); setConfId(null); }}>Sure?</button>
+                  : <button className="pd" title="Delete payment" onClick={(e) => { e.stopPropagation(); setConfId(p.id); }}><Trash2 size={14} /></button>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {filtered.length > limit && (
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <button className="btn bg" onClick={() => setLimit(l => l + 200)}>Show more ({filtered.length - limit} remaining)</button>
+          <div style={{ fontSize: 11.5, color: '#8B9A8E', marginTop: 8 }}>Showing {visible.length} of {filtered.length}</div>
+        </div>
+      )}
+    </>
+  );
+}
 
 /* ========================  CLASS EXAM FEES  ======================== */
 

@@ -275,20 +275,26 @@ export const getMyProfile = async () => {
   if (!user) return null
   const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle()
   if (error) { console.error('getMyProfile', error); return { id: user.id, email: user.email, approved: false, isAdmin: false } }
-  if (!data) return { id: user.id, email: user.email, approved: false, isAdmin: false }
-  return { id: data.id, email: data.email, approved: !!data.approved, isAdmin: !!data.is_admin, createdAt: data.created_at }
+  if (!data) return { id: user.id, email: user.email, approved: false, isAdmin: false, displayName: '' }
+  return { id: data.id, email: data.email, approved: !!data.approved, isAdmin: !!data.is_admin, displayName: data.display_name || '', createdAt: data.created_at }
 }
 
 // All profiles (only readable by approved admins, enforced via RLS).
 export const listProfiles = async () => {
   const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: true })
   if (error) { console.error('listProfiles', error); return [] }
-  return (data || []).map(p => ({ id: p.id, email: p.email, approved: !!p.approved, isAdmin: !!p.is_admin, createdAt: p.created_at }))
+  return (data || []).map(p => ({ id: p.id, email: p.email, approved: !!p.approved, isAdmin: !!p.is_admin, displayName: p.display_name || '', createdAt: p.created_at }))
 }
 
 // Approve or revoke a user's access.
 export const setApproval = async (id, approved) => {
   const { error } = await supabase.from('profiles').update({ approved }).eq('id', id)
+  if (error) throw error
+}
+
+// Set YOUR OWN display name (safe DB function: can change nothing else).
+export const setDisplayName = async (name) => {
+  const { error } = await supabase.rpc('set_display_name', { new_name: name || '' })
   if (error) throw error
 }
 
